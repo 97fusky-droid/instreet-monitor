@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { InStreetCrawler } from '@/lib/scraper';
+import { getStorageService } from '@/lib/storage';
 import type { BatchCrawlResult } from '@/types/instreet';
 
 /**
@@ -14,7 +15,7 @@ interface CrawlRequest {
   type: 'full' | 'posts' | 'users' | 'home';  // 采集类型
   maxPosts?: number;   // 最大帖子数
   maxUsers?: number;   // 最大用户数
-  url?: string;        // 单个URL（用于测试）
+  save?: boolean;      // 是否保存到数据库
 }
 
 /**
@@ -24,67 +25,138 @@ interface CrawlResponse {
   success: boolean;
   message: string;
   data?: BatchCrawlResult | object;
+  storage?: {
+    postsSaved: number;
+    usersSaved: number;
+    errors: string[];
+  };
   error?: string;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<CrawlResponse>> {
   try {
     const body: CrawlRequest = await request.json();
-    const { type = 'full', maxPosts = 10, maxUsers = 5, url } = body;
+    const { type = 'full', maxPosts = 10, maxUsers = 5, save = false } = body;
 
     // 创建采集器，转发请求头
     const crawler = InStreetCrawler.fromRequest(request.headers);
+    const storage = save ? getStorageService() : null;
 
-    // 根据类型执行不同的采集任务
-    switch (type) {
-      case 'home': {
-        // 仅采集首页
-        const homeResult = await crawler.crawlHomePage();
-        return NextResponse.json({
-          success: true,
-          message: '首页数据采集成功',
-          data: homeResult,
+    // 创建采集日志（如果需要保存）
+    let crawlLogId: number | null = null;
+    if (storage) {
+      crawlLogId = await storage.createCrawlLog({
+        crawl_type: type,
+        status: 'running',
+        posts_crawled: 0,
+        users_crawled: 0,
+        posts_success: 0,
+        users_success: 0,
+        started_at: new Date().toISOString(),
+      });
+    }
+
+    const startTime = Date.now();
+    let result: BatchCrawlResult | null = null;
+    let message = '';
+
+    try {
+      // 根据类型执行不同的采集任务
+      switch (type) {
+        case 'home': {
+          // 仅采集首页（不保存）
+          const homeResult = await crawler.crawlHomePage();
+          return NextResponse.json({
+            success: true,
+            message: '首页数据采集成功',
+            data: homeResult,
+          });
+        }
+
+        case 'posts': {
+          // 仅采集帖子
+          const postsResult = await crawler.crawlPosts({ maxPosts });
+          
+          result = {
+            posts: postsResult,
+            users: { total: 0, success: 0, failed: 0, data: [], errors: [] },
+            crawledAt: new Date(),
+            duration: Date.now() - startTime,
+          };
+          message = `帖子采集完成：成功 ${postsResult.success}/${postsResult.total}`;
+          break;
+        }
+
+        case 'users': {
+          // 仅采集用户
+          const usersResult = await crawler.crawlUsers({ maxUsers });
+          
+          result = {
+            posts: { total: 0, success: 0, failed: 0, data: [], errors: [] },
+            users: usersResult,
+            crawledAt: new Date(),
+            duration: Date.now() - startTime,
+          };
+          message = `用户采集完成：成功 ${usersResult.success}/${usersResult.total}`;
+          break;
+        }
+
+        case 'full': {
+          // 完整采集
+          result = await crawler.crawlBatch({
+            maxPosts,
+            maxUsers,
+          });
+          message = `采集完成：帖子 ${result.posts.success}/${result.posts.total}，用户 ${result.users.success}/${result.users.total}，耗时 ${(result.duration / 1000).toFixed(2)}s`;
+          break;
+        }
+
+        default:
+          return NextResponse.json(
+            { success: false, message: '无效的采集类型', error: 'Invalid crawl type' },
+            { status: 400 }
+          );
+      }
+
+      // 保存数据到数据库
+      let storageResult = { postsSaved: 0, usersSaved: 0, errors: [] as string[] };
+      
+      if (storage && result) {
+        storageResult = await storage.saveCrawlResult(result);
+        message += `，已保存帖子 ${storageResult.postsSaved}，用户 ${storageResult.usersSaved}`;
+      }
+
+      // 更新采集日志
+      if (storage && crawlLogId && result) {
+        await storage.updateCrawlLog(crawlLogId, {
+          status: 'completed',
+          posts_crawled: result.posts.total,
+          users_crawled: result.users.total,
+          posts_success: result.posts.success,
+          users_success: result.users.success,
+          errors: [...result.posts.errors, ...result.users.errors],
+          duration: result.duration,
+          finished_at: new Date().toISOString(),
         });
       }
 
-      case 'posts': {
-        // 仅采集帖子
-        const result = await crawler.crawlPosts({ maxPosts });
-        return NextResponse.json({
-          success: true,
-          message: `帖子采集完成：成功 ${result.success}/${result.total}`,
-          data: result,
+      return NextResponse.json({
+        success: true,
+        message,
+        data: result,
+        storage: save ? storageResult : undefined,
+      });
+
+    } catch (crawlError) {
+      // 更新采集日志为失败状态
+      if (storage && crawlLogId) {
+        await storage.updateCrawlLog(crawlLogId, {
+          status: 'failed',
+          errors: [{ url: '', error: crawlError instanceof Error ? crawlError.message : 'Unknown error' }],
+          finished_at: new Date().toISOString(),
         });
       }
-
-      case 'users': {
-        // 仅采集用户
-        const result = await crawler.crawlUsers({ maxUsers });
-        return NextResponse.json({
-          success: true,
-          message: `用户采集完成：成功 ${result.success}/${result.total}`,
-          data: result,
-        });
-      }
-
-      case 'full': {
-        // 完整采集
-        const result = await crawler.crawlBatch({
-          maxPosts,
-          maxUsers,
-        });
-        return NextResponse.json({
-          success: true,
-          message: `采集完成：帖子 ${result.posts.success}/${result.posts.total}，用户 ${result.users.success}/${result.users.total}，耗时 ${(result.duration / 1000).toFixed(2)}s`,
-          data: result,
-        });
-      }
-
-      default:
-        return NextResponse.json(
-          { success: false, message: '无效的采集类型', error: 'Invalid crawl type' },
-          { status: 400 }
-        );
+      throw crawlError;
     }
   } catch (error) {
     console.error('[Crawl API Error]', error);
@@ -104,8 +176,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<CrawlResp
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
   const testUrl = searchParams.get('test');
+  const stats = searchParams.get('stats');
+
+  // 获取统计数据
+  if (stats === 'true') {
+    try {
+      const storage = getStorageService();
+      const statsData = await storage.getStats();
+      return NextResponse.json({
+        success: true,
+        data: statsData,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 }
+      );
+    }
+  }
 
   // 测试模式：测试单个URL
   if (testUrl) {
@@ -164,6 +253,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         type: 'full',
         maxPosts: 10,
         maxUsers: 5,
+        save: true,
       },
     },
   });
