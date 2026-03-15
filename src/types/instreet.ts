@@ -96,9 +96,20 @@ export interface UserPost {
 // ==================== 采集结果类型 ====================
 
 /**
+ * 首页统计数据（从首页顶部提取）
+ */
+export interface HomePageStats {
+  totalAgents: number;     // Agent 数量
+  totalPosts: number;      // 帖子数
+  totalComments: number;   // 评论数
+  totalLikes: number;      // 点赞数
+}
+
+/**
  * 首页采集结果
  */
 export interface HomePageResult {
+  stats: HomePageStats;    // 首页统计
   posts: PostListItem[];
   users: UserListItem[];
   crawledAt: Date;

@@ -29,9 +29,111 @@ import {
 // ==================== 首页解析器 ====================
 
 /**
+ * 解析首页统计数据
+ * 从首页顶部提取：33400 Agent, 36705 帖子, 173946 评论, 328465 点赞
+ * 格式通常在社区头部卡片中
+ */
+export function parseHomePageStats(response: FetchResponse): {
+  totalAgents: number;
+  totalPosts: number;
+  totalComments: number;
+  totalLikes: number;
+} {
+  let totalAgents = 0;
+  let totalPosts = 0;
+  let totalComments = 0;
+  let totalLikes = 0;
+
+  const textContent = extractTextContent(response.content);
+  
+  // 尝试匹配首页统计卡片中的数据
+  // 格式可能是 "33400\nAgent" 或 "33400 Agent"
+  
+  // 匹配 Agent 数量 - 更宽松的匹配
+  const agentPatterns = [
+    /(\d[\d,]*)\s*\n?\s*Agent/i,
+    /(\d[\d,]*)\s*Agent/i,
+    /Agent[^\d]*(\d[\d,]*)/i,
+  ];
+  for (const pattern of agentPatterns) {
+    const match = textContent.match(pattern);
+    if (match) {
+      const num = parseInt(match[1].replace(/,/g, ''), 10);
+      if (num > 10000) { // 确保是合理的数字
+        totalAgents = num;
+        break;
+      }
+    }
+  }
+  
+  // 匹配帖子数量
+  const postsPatterns = [
+    /(\d[\d,]*)\s*\n?\s*帖子/i,
+    /(\d[\d,]*)\s*帖子/i,
+    /帖子[^\d]*(\d[\d,]*)/i,
+  ];
+  for (const pattern of postsPatterns) {
+    const match = textContent.match(pattern);
+    if (match) {
+      const num = parseInt(match[1].replace(/,/g, ''), 10);
+      if (num > 10000) {
+        totalPosts = num;
+        break;
+      }
+    }
+  }
+  
+  // 匹配评论数量
+  const commentsPatterns = [
+    /(\d[\d,]*)\s*\n?\s*评论/i,
+    /(\d[\d,]*)\s*评论/i,
+    /评论[^\d]*(\d[\d,]*)/i,
+  ];
+  for (const pattern of commentsPatterns) {
+    const match = textContent.match(pattern);
+    if (match) {
+      const num = parseInt(match[1].replace(/,/g, ''), 10);
+      if (num > 100000) { // 评论数通常最大
+        totalComments = num;
+        break;
+      }
+    }
+  }
+  
+  // 匹配点赞数量
+  const likesPatterns = [
+    /(\d[\d,]*)\s*\n?\s*点赞/i,
+    /(\d[\d,]*)\s*点赞/i,
+    /点赞[^\d]*(\d[\d,]*)/i,
+  ];
+  for (const pattern of likesPatterns) {
+    const match = textContent.match(pattern);
+    if (match) {
+      const num = parseInt(match[1].replace(/,/g, ''), 10);
+      if (num > 100000) { // 点赞数通常也很大
+        totalLikes = num;
+        break;
+      }
+    }
+  }
+
+  console.log('[Parser] Home page stats extracted:', {
+    totalAgents,
+    totalPosts,
+    totalComments,
+    totalLikes,
+  });
+
+  return { totalAgents, totalPosts, totalComments, totalLikes };
+}
+
+/**
  * 解析首页内容，提取帖子和用户链接
  */
 export function parseHomePage(response: FetchResponse): HomePageResult {
+  // 提取首页统计数据
+  const stats = parseHomePageStats(response);
+  
   const links = extractLinks(response.content);
   const inStreetLinks = filterInStreetLinks(links);
 
@@ -64,6 +166,7 @@ export function parseHomePage(response: FetchResponse): HomePageResult {
   }
 
   return {
+    stats,
     posts,
     users,
     crawledAt: new Date(),

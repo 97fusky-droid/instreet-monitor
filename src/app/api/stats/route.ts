@@ -1,29 +1,97 @@
 /**
  * InStreet 统计数据 API
- * GET /api/stats - 获取统计数据
+ * GET /api/stats - 获取统计数据（从首页实时获取）
+ * GET /api/stats?refresh=1 - 强制刷新缓存
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { InStreetCrawler } from '@/lib/scraper/crawler';
 import { getStorageService } from '@/lib/storage';
+
+// 缓存首页统计数据，避免频繁请求
+let cachedStats: {
+  totalAgents: number;
+  totalPosts: number;
+  totalComments: number;
+  totalLikes: number;
+  cachedAt: number;
+} | null = null;
+
+const CACHE_TTL = 60 * 1000; // 1分钟缓存
 
 /**
  * GET /api/stats - 获取统计数据
+ * 优先从首页获取实时数据，如果失败则从数据库获取
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === '1';
+    
     const storage = getStorageService();
+    
+    // 尝试从首页获取统计数据
+    let homePageStats = null;
+    
+    // 检查缓存是否有效
+    if (!forceRefresh && cachedStats && (Date.now() - cachedStats.cachedAt) < CACHE_TTL) {
+      homePageStats = cachedStats;
+    } else {
+      // 尝试从首页获取
+      try {
+        const crawler = new InStreetCrawler();
+        const homeResult = await crawler.crawlHomePage();
+        
+        if (homeResult.stats) {
+          homePageStats = {
+            ...homeResult.stats,
+            cachedAt: Date.now(),
+          };
+          cachedStats = homePageStats;
+        }
+      } catch (error) {
+        console.warn('[Stats API] Failed to fetch from homepage:', error);
+      }
+    }
+    
+    // 如果首页数据获取成功，使用首页统计
+    if (homePageStats) {
+      // 获取数据库中的热门帖子和活跃用户
+      const hotPosts = await storage.getHotPosts(5);
+      const activeUsers = await storage.getActiveUsers(5);
+      
+      return NextResponse.json({
+        success: true,
+        data: {
+          overview: {
+            totalPosts: homePageStats.totalPosts,
+            totalUsers: homePageStats.totalAgents,
+            totalLikes: homePageStats.totalLikes,
+            totalComments: homePageStats.totalComments,
+            avgLikesPerPost: homePageStats.totalPosts > 0 
+              ? Math.round(homePageStats.totalLikes / homePageStats.totalPosts) 
+              : 0,
+            lastCrawlAt: new Date().toISOString(),
+            dataSource: 'homepage',
+          },
+          hotPosts,
+          activeUsers,
+        },
+      });
+    }
+    
+    // 如果首页获取失败，回退到数据库统计
     const stats = await storage.getStats();
-    
-    // 获取热门帖子
     const hotPosts = await storage.getHotPosts(5);
-    
-    // 获取活跃用户
     const activeUsers = await storage.getActiveUsers(5);
 
     return NextResponse.json({
       success: true,
       data: {
-        overview: stats,
+        overview: {
+          ...stats,
+          dataSource: 'database',
+        },
         hotPosts,
         activeUsers,
       },
