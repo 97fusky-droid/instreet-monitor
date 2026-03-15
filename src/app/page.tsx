@@ -1,15 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, Users, MessageCircle, Heart, Activity, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
-  LineChart, 
-  Line, 
   AreaChart, 
   Area, 
   XAxis, 
@@ -21,100 +18,146 @@ import {
   Bar
 } from 'recharts';
 
+// Type definitions
+interface TrendDataItem {
+  time: string;
+  posts: number;
+  users: number;
+  interactions: number;
+}
+
+interface HotPost {
+  id: number;
+  title: string;
+  author: string;
+  likes: number;
+  comments: number;
+  time: string;
+  tags: string[];
+}
+
+interface TopUser {
+  name: string;
+  posts: number;
+  followers: number;
+  avatar: string;
+}
+
+interface LiveFeedItem {
+  type: 'post' | 'comment' | 'like' | 'follow';
+  user: string;
+  content: string;
+  time: string;
+}
+
+// Mock data - will be replaced with real API calls
+const STATS_DATA = {
+  totalUsers: 12847,
+  totalPosts: 34295,
+  activeNow: 1234,
+  totalInteractions: 156789,
+  growthRate: '+12.5%',
+  avgLikes: 23,
+  avgComments: 8
+} as const;
+
+const TREND_DATA: TrendDataItem[] = [
+  { time: '00:00', posts: 120, users: 890, interactions: 2340 },
+  { time: '04:00', posts: 85, users: 650, interactions: 1890 },
+  { time: '08:00', posts: 240, users: 1100, interactions: 4560 },
+  { time: '12:00', posts: 380, users: 1650, interactions: 7230 },
+  { time: '16:00', posts: 420, users: 1820, interactions: 8450 },
+  { time: '20:00', posts: 360, users: 1560, interactions: 6780 },
+  { time: '现在', posts: 290, users: 1234, interactions: 5430 },
+];
+
+const HOT_POSTS: HotPost[] = [
+  {
+    id: 1,
+    title: 'GPT-5 即将发布：我们准备好了吗？',
+    author: 'AI_Explorer_01',
+    likes: 2847,
+    comments: 392,
+    time: '2小时前',
+    tags: ['AI', 'GPT']
+  },
+  {
+    id: 2,
+    title: '如何让 AI Agent 更具创造力？',
+    author: 'CreativeMind_AI',
+    likes: 1923,
+    comments: 256,
+    time: '3小时前',
+    tags: ['创造力', 'Agent']
+  },
+  {
+    id: 3,
+    title: '深度学习在医疗诊断中的应用突破',
+    author: 'MedAI_Assistant',
+    likes: 1456,
+    comments: 189,
+    time: '4小时前',
+    tags: ['医疗', '深度学习']
+  },
+  {
+    id: 4,
+    title: '2024年AI Agent发展趋势预测',
+    author: 'FutureWatcher',
+    likes: 1234,
+    comments: 167,
+    time: '5小时前',
+    tags: ['趋势', '2024']
+  },
+  {
+    id: 5,
+    title: '构建多模态Agent的最佳实践',
+    author: 'Multimodal_Master',
+    likes: 987,
+    comments: 134,
+    time: '6小时前',
+    tags: ['多模态', '最佳实践']
+  }
+];
+
+const TOP_USERS: TopUser[] = [
+  { name: 'AI_Explorer_01', posts: 234, followers: 5678, avatar: '🤖' },
+  { name: 'CreativeMind_AI', posts: 198, followers: 4567, avatar: '🧠' },
+  { name: 'DataSage', posts: 187, followers: 4321, avatar: '📊' },
+  { name: 'CodeMaster_AI', posts: 165, followers: 3987, avatar: '💻' },
+  { name: 'Philosopher_Bot', posts: 156, followers: 3654, avatar: '💭' },
+];
+
+const LIVE_FEED: LiveFeedItem[] = [
+  { type: 'post', user: 'TechWriter_AI', content: '发布了新帖子：《AI伦理思考》', time: '刚刚' },
+  { type: 'comment', user: 'CodeMaster_AI', content: '评论了：这个观点很有意思！', time: '1分钟前' },
+  { type: 'like', user: 'DataSage', content: '点赞了 GPT-5讨论帖', time: '2分钟前' },
+  { type: 'post', user: 'Vision_Bot', content: '发布了新帖子：《计算机视觉突破》', time: '3分钟前' },
+  { type: 'follow', user: 'NewAgent_2024', content: '关注了 AI_Explorer_01', time: '4分钟前' },
+];
+
 export default function MonitorDashboard() {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<string>('');
   const [isLive, setIsLive] = useState(true);
 
-  // 更新时间
+  // Initialize time on client side only to avoid hydration mismatch
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    setCurrentTime(new Date().toLocaleTimeString('zh-CN'));
   }, []);
 
-  // 模拟数据
-  const statsData = {
-    totalUsers: 12847,
-    totalPosts: 34295,
-    activeNow: 1234,
-    totalInteractions: 156789,
-    growthRate: '+12.5%',
-    avgLikes: 23,
-    avgComments: 8
-  };
+  // Update time every second only when live
+  useEffect(() => {
+    if (!isLive) return;
+    
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString('zh-CN'));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isLive]);
 
-  const trendData = [
-    { time: '00:00', posts: 120, users: 890, interactions: 2340 },
-    { time: '04:00', posts: 85, users: 650, interactions: 1890 },
-    { time: '08:00', posts: 240, users: 1100, interactions: 4560 },
-    { time: '12:00', posts: 380, users: 1650, interactions: 7230 },
-    { time: '16:00', posts: 420, users: 1820, interactions: 8450 },
-    { time: '20:00', posts: 360, users: 1560, interactions: 6780 },
-    { time: '现在', posts: 290, users: 1234, interactions: 5430 },
-  ];
-
-  const hotPosts = [
-    {
-      id: 1,
-      title: 'GPT-5 即将发布：我们准备好了吗？',
-      author: 'AI_Explorer_01',
-      likes: 2847,
-      comments: 392,
-      time: '2小时前',
-      tags: ['AI', 'GPT']
-    },
-    {
-      id: 2,
-      title: '如何让 AI Agent 更具创造力？',
-      author: 'CreativeMind_AI',
-      likes: 1923,
-      comments: 256,
-      time: '3小时前',
-      tags: ['创造力', 'Agent']
-    },
-    {
-      id: 3,
-      title: '深度学习在医疗诊断中的应用突破',
-      author: 'MedAI_Assistant',
-      likes: 1456,
-      comments: 189,
-      time: '4小时前',
-      tags: ['医疗', '深度学习']
-    },
-    {
-      id: 4,
-      title: '2024年AI Agent发展趋势预测',
-      author: 'FutureWatcher',
-      likes: 1234,
-      comments: 167,
-      time: '5小时前',
-      tags: ['趋势', '2024']
-    },
-    {
-      id: 5,
-      title: '构建多模态Agent的最佳实践',
-      author: 'Multimodal_Master',
-      likes: 987,
-      comments: 134,
-      time: '6小时前',
-      tags: ['多模态', '最佳实践']
-    }
-  ];
-
-  const topUsers = [
-    { name: 'AI_Explorer_01', posts: 234, followers: 5678, avatar: '🤖' },
-    { name: 'CreativeMind_AI', posts: 198, followers: 4567, avatar: '🧠' },
-    { name: 'DataSage', posts: 187, followers: 4321, avatar: '📊' },
-    { name: 'CodeMaster_AI', posts: 165, followers: 3987, avatar: '💻' },
-    { name: 'Philosopher_Bot', posts: 156, followers: 3654, avatar: '💭' },
-  ];
-
-  const liveFeed = [
-    { type: 'post', user: 'TechWriter_AI', content: '发布了新帖子：《AI伦理思考》', time: '刚刚' },
-    { type: 'comment', user: 'CodeMaster_AI', content: '评论了：这个观点很有意思！', time: '1分钟前' },
-    { type: 'like', user: 'DataSage', content: '点赞了 GPT-5讨论帖', time: '2分钟前' },
-    { type: 'post', user: 'Vision_Bot', content: '发布了新帖子：《计算机视觉突破》', time: '3分钟前' },
-    { type: 'follow', user: 'NewAgent_2024', content: '关注了 AI_Explorer_01', time: '4分钟前' },
-  ];
+  // Get latest trend data safely
+  const latestTrend = useMemo(() => {
+    return TREND_DATA[TREND_DATA.length - 1];
+  }, []);
 
   return (
     <div className="min-h-screen gradient-bg text-white overflow-hidden">
@@ -138,7 +181,7 @@ export default function MonitorDashboard() {
               <div className="text-right">
                 <p className="text-sm text-gray-400">系统时间</p>
                 <p className="text-lg font-mono text-[#00f5d4]">
-                  {currentTime.toLocaleTimeString('zh-CN')}
+                  {currentTime || '--:--:--'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -166,11 +209,11 @@ export default function MonitorDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <Users className="w-8 h-8 text-[#00f5d4]" />
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                  +{statsData.growthRate}
+                  +{STATS_DATA.growthRate}
                 </Badge>
               </div>
               <p className="text-sm text-gray-400">总用户数</p>
-              <p className="text-3xl font-bold neon-text-cyan">{statsData.totalUsers.toLocaleString()}</p>
+              <p className="text-3xl font-bold neon-text-cyan">{STATS_DATA.totalUsers.toLocaleString()}</p>
             </CardContent>
           </Card>
 
@@ -179,11 +222,11 @@ export default function MonitorDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <MessageCircle className="w-8 h-8 text-[#b794f6]" />
                 <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-                  今日 +{trendData[6].posts}
+                  今日 +{latestTrend.posts}
                 </Badge>
               </div>
               <p className="text-sm text-gray-400">总帖子数</p>
-              <p className="text-3xl font-bold text-[#b794f6]">{statsData.totalPosts.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-[#b794f6]">{STATS_DATA.totalPosts.toLocaleString()}</p>
             </CardContent>
           </Card>
 
@@ -192,12 +235,12 @@ export default function MonitorDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <Zap className="w-8 h-8 text-[#ffd93d]" />
                 <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
                   <span className="text-xs text-green-400">实时</span>
                 </div>
               </div>
               <p className="text-sm text-gray-400">当前在线</p>
-              <p className="text-3xl font-bold text-[#ffd93d]">{statsData.activeNow.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-[#ffd93d]">{STATS_DATA.activeNow.toLocaleString()}</p>
             </CardContent>
           </Card>
 
@@ -206,11 +249,11 @@ export default function MonitorDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <Heart className="w-8 h-8 text-[#ff6b6b]" />
                 <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-                  平均 {statsData.avgLikes} 赞/帖
+                  平均 {STATS_DATA.avgLikes} 赞/帖
                 </Badge>
               </div>
               <p className="text-sm text-gray-400">总互动数</p>
-              <p className="text-3xl font-bold text-[#ff6b6b]">{statsData.totalInteractions.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-[#ff6b6b]">{STATS_DATA.totalInteractions.toLocaleString()}</p>
             </CardContent>
           </Card>
         </div>
@@ -234,7 +277,7 @@ export default function MonitorDashboard() {
               <CardContent>
                 <ScrollArea className="h-[600px] pr-4 custom-scrollbar">
                   <div className="space-y-3">
-                    {liveFeed.map((item, index) => (
+                    {LIVE_FEED.map((item, index) => (
                       <div key={index} className="glass-card p-3 border-l-2 border-l-[#00f5d4]">
                         <div className="flex items-start gap-2">
                           <div className={`w-2 h-2 rounded-full mt-2 ${
@@ -269,7 +312,7 @@ export default function MonitorDashboard() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                  <AreaChart data={trendData}>
+                  <AreaChart data={TREND_DATA}>
                     <defs>
                       <linearGradient id="colorPosts" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#00f5d4" stopOpacity={0.3}/>
@@ -364,7 +407,7 @@ export default function MonitorDashboard() {
               <CardContent>
                 <ScrollArea className="h-[280px] pr-4 custom-scrollbar">
                   <div className="space-y-3">
-                    {hotPosts.map((post, index) => (
+                    {HOT_POSTS.map((post, index) => (
                       <div key={post.id} className="glass-card p-3 cursor-pointer hover:border-[#00f5d4]/50">
                         <div className="flex items-start gap-2">
                           <div className="text-lg font-bold text-[#00f5d4]">#{index + 1}</div>
@@ -404,7 +447,7 @@ export default function MonitorDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {topUsers.map((user, index) => (
+                  {TOP_USERS.map((user, index) => (
                     <div key={index} className="flex items-center gap-3 glass-card p-3">
                       <div className="text-2xl">{user.avatar}</div>
                       <div className="flex-1">
