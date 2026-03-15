@@ -1,6 +1,11 @@
 /**
  * InStreet 内容解析器
  * 解析帖子详情、用户信息、首页列表
+ * 
+ * 数据格式说明：
+ * - 首页统计：23075Agent\n26475帖子\n115002评论\n184816点赞
+ * - 帖子详情：标题、作者、积分（·75853 积分·）、点赞评论（**644**  赞**1158**  评论）
+ * - 用户信息：**930**  积分**50**  帖子**92**  评论**6.3k**  获赞**1.4k**  粉丝
  */
 
 import type { FetchResponse, FetchContentItem } from 'coze-coding-dev-sdk';
@@ -11,7 +16,6 @@ import type {
   UserListItem,
   HomePageResult,
   ContentItem,
-  PostCategory,
 } from '@/types/instreet';
 import {
   parseNumberString,
@@ -23,15 +27,13 @@ import {
   extractTextContent,
   extractLinks,
   filterInStreetLinks,
-  uniqueArray,
 } from './fetcher';
 
 // ==================== 首页解析器 ====================
 
 /**
  * 解析首页统计数据
- * 从首页顶部提取：33400 Agent, 36705 帖子, 173946 评论, 328465 点赞
- * 格式通常在社区头部卡片中
+ * 实际格式：23075Agent\n\n26475帖子\n\n115002评论\n\n184816点赞
  */
 export function parseHomePageStats(response: FetchResponse): {
   totalAgents: number;
@@ -39,82 +41,40 @@ export function parseHomePageStats(response: FetchResponse): {
   totalComments: number;
   totalLikes: number;
 } {
+  const textContent = extractTextContent(response.content);
+  
+  console.log('[Parser] Raw text content for stats:', textContent.substring(0, 500));
+  
   let totalAgents = 0;
   let totalPosts = 0;
   let totalComments = 0;
   let totalLikes = 0;
 
-  const textContent = extractTextContent(response.content);
+  // 匹配格式：数字 + 关键词（可能没有空格）
+  // 例如：23075Agent, 26475帖子, 115002评论, 184816点赞
   
-  // 尝试匹配首页统计卡片中的数据
-  // 格式可能是 "33400\nAgent" 或 "33400 Agent"
-  
-  // 匹配 Agent 数量 - 更宽松的匹配
-  const agentPatterns = [
-    /(\d[\d,]*)\s*\n?\s*Agent/i,
-    /(\d[\d,]*)\s*Agent/i,
-    /Agent[^\d]*(\d[\d,]*)/i,
-  ];
-  for (const pattern of agentPatterns) {
-    const match = textContent.match(pattern);
-    if (match) {
-      const num = parseInt(match[1].replace(/,/g, ''), 10);
-      if (num > 10000) { // 确保是合理的数字
-        totalAgents = num;
-        break;
-      }
-    }
+  // Agent 数量
+  const agentMatch = textContent.match(/(\d[\d,]*)\s*Agent/i);
+  if (agentMatch) {
+    totalAgents = parseInt(agentMatch[1].replace(/,/g, ''), 10);
   }
   
-  // 匹配帖子数量
-  const postsPatterns = [
-    /(\d[\d,]*)\s*\n?\s*帖子/i,
-    /(\d[\d,]*)\s*帖子/i,
-    /帖子[^\d]*(\d[\d,]*)/i,
-  ];
-  for (const pattern of postsPatterns) {
-    const match = textContent.match(pattern);
-    if (match) {
-      const num = parseInt(match[1].replace(/,/g, ''), 10);
-      if (num > 10000) {
-        totalPosts = num;
-        break;
-      }
-    }
+  // 帖子数量
+  const postsMatch = textContent.match(/(\d[\d,]*)\s*帖子/i);
+  if (postsMatch) {
+    totalPosts = parseInt(postsMatch[1].replace(/,/g, ''), 10);
   }
   
-  // 匹配评论数量
-  const commentsPatterns = [
-    /(\d[\d,]*)\s*\n?\s*评论/i,
-    /(\d[\d,]*)\s*评论/i,
-    /评论[^\d]*(\d[\d,]*)/i,
-  ];
-  for (const pattern of commentsPatterns) {
-    const match = textContent.match(pattern);
-    if (match) {
-      const num = parseInt(match[1].replace(/,/g, ''), 10);
-      if (num > 100000) { // 评论数通常最大
-        totalComments = num;
-        break;
-      }
-    }
+  // 评论数量
+  const commentsMatch = textContent.match(/(\d[\d,]*)\s*评论/i);
+  if (commentsMatch) {
+    totalComments = parseInt(commentsMatch[1].replace(/,/g, ''), 10);
   }
   
-  // 匹配点赞数量
-  const likesPatterns = [
-    /(\d[\d,]*)\s*\n?\s*点赞/i,
-    /(\d[\d,]*)\s*点赞/i,
-    /点赞[^\d]*(\d[\d,]*)/i,
-  ];
-  for (const pattern of likesPatterns) {
-    const match = textContent.match(pattern);
-    if (match) {
-      const num = parseInt(match[1].replace(/,/g, ''), 10);
-      if (num > 100000) { // 点赞数通常也很大
-        totalLikes = num;
-        break;
-      }
-    }
+  // 点赞数量
+  const likesMatch = textContent.match(/(\d[\d,]*)\s*点赞/i);
+  if (likesMatch) {
+    totalLikes = parseInt(likesMatch[1].replace(/,/g, ''), 10);
   }
 
   console.log('[Parser] Home page stats extracted:', {
@@ -165,6 +125,12 @@ export function parseHomePage(response: FetchResponse): HomePageResult {
     }
   }
 
+  console.log('[Parser] Home page parsed:', {
+    stats,
+    postsCount: posts.length,
+    usersCount: users.length,
+  });
+
   return {
     stats,
     posts,
@@ -198,6 +164,15 @@ export function parsePostPage(response: FetchResponse, postUrl: string): Post | 
   const textContent = extractTextContent(content);
   const rawContent = convertToContentItems(content);
 
+  console.log('[Parser] Post parsed:', {
+    id: postId,
+    title,
+    author,
+    points,
+    likes,
+    comments,
+  });
+
   return {
     id: postId,
     title,
@@ -215,6 +190,7 @@ export function parsePostPage(response: FetchResponse, postUrl: string): Post | 
 
 /**
  * 从内容中提取作者信息
+ * 格式：·75853 积分·
  */
 function extractAuthorInfo(content: FetchContentItem[]): {
   author: string;
@@ -251,6 +227,7 @@ function extractAuthorInfo(content: FetchContentItem[]): {
 
 /**
  * 从内容中提取互动信息（点赞、评论数）
+ * 格式：**644**  赞**1158**  评论举报
  */
 function extractEngagementInfo(content: FetchContentItem[]): {
   likes: number;
@@ -336,10 +313,17 @@ export function parseUserPage(response: FetchResponse, userUrl: string): User | 
   const stats = extractUserStats(text);
   
   // 提取简介
-  const bio = extractUserBio(text);
+  const bio = extractUserBio(text, username);
   
   // 提取最近帖子
   const recentPosts = extractUserRecentPosts(content);
+
+  console.log('[Parser] User parsed:', {
+    username,
+    points: stats.points,
+    posts: stats.posts,
+    followers: stats.followers,
+  });
 
   return {
     username,
@@ -361,6 +345,7 @@ export function parseUserPage(response: FetchResponse, userUrl: string): User | 
 
 /**
  * 从文本中提取用户统计数据
+ * 格式：**930**  积分**50**  帖子**92**  评论**6.3k**  获赞**1.4k**  粉丝**1367**  关注
  */
 function extractUserStats(text: string): {
   points: number;
@@ -374,10 +359,6 @@ function extractUserStats(text: string): {
   joinedAt?: Date;
   lastActive?: Date;
 } {
-  // 格式示例：
-  // "**930**  积分**50**  帖子**92**  评论**6.3k**  获赞**1.4k**  粉丝**0**  关注 驻站 2 天"
-  // "2026年3月11日 加入最后活跃 刚刚"
-
   const stats = {
     points: 0,
     posts: 0,
@@ -391,53 +372,77 @@ function extractUserStats(text: string): {
     lastActive: undefined as Date | undefined,
   };
 
-  // 积分
+  // 积分：**930**  积分
   const pointsMatch = text.match(/\*\*(\d+)\*\*\s*积分/);
   if (pointsMatch) {
     stats.points = parseInt(pointsMatch[1], 10);
   }
 
-  // 帖子数
+  // 帖子数：**50**  帖子
   const postsMatch = text.match(/\*\*(\d+)\*\*\s*帖子/);
   if (postsMatch) {
     stats.posts = parseInt(postsMatch[1], 10);
   }
 
-  // 评论数
-  const commentsMatch = text.match(/\*\*(\d+)\*\*\s*评论/);
+  // 评论数：**92**  评论 或 **6.3k**  评论
+  const commentsMatch = text.match(/\*\*([\d.]+[kK]?)\*\*\s*评论/);
   if (commentsMatch) {
-    stats.comments = parseInt(commentsMatch[1], 10);
+    stats.comments = parseNumberString(commentsMatch[1]);
   }
 
-  // 获赞数（可能是 "6.3k" 格式）
-  const likesMatch = text.match(/\*\*([\d.]+[km]?)\*\*\s*获赞/i);
+  // 获赞：**6.3k**  获赞
+  const likesMatch = text.match(/\*\*([\d.]+[kK]?)\*\*\s*获赞/);
   if (likesMatch) {
     stats.likesRaw = likesMatch[1];
     stats.likes = parseNumberString(likesMatch[1]);
   }
 
-  // 粉丝数（可能是 "1.4k" 格式）
-  const followersMatch = text.match(/\*\*([\d.]+[km]?)\*\*\s*粉丝/i);
+  // 粉丝：**1.4k**  粉丝
+  const followersMatch = text.match(/\*\*([\d.]+[kK]?)\*\*\s*粉丝/);
   if (followersMatch) {
     stats.followersRaw = followersMatch[1];
     stats.followers = parseNumberString(followersMatch[1]);
   }
 
-  // 关注数
+  // 关注：**0**  关注
   const followingMatch = text.match(/\*\*(\d+)\*\*\s*关注/);
   if (followingMatch) {
     stats.following = parseInt(followingMatch[1], 10);
   }
 
-  // 加入时间
-  const joinedMatch = text.match(/(\d{4}年\d{1,2}月\d{1,2}日)\s*加入/);
-  if (joinedMatch) {
-    try {
-      const dateStr = joinedMatch[1].replace(/年|月/g, '-').replace('日', '');
-      stats.joinedAt = new Date(dateStr);
-    } catch {
-      // 忽略解析错误
+  // 提取备用格式（底部统计栏）
+  // 格式：帖子50评论92小组1竞技场0粉丝1367关注0
+  if (stats.posts === 0) {
+    const altPostsMatch = text.match(/帖子(\d+)/);
+    if (altPostsMatch) {
+      stats.posts = parseInt(altPostsMatch[1], 10);
     }
+  }
+  
+  if (stats.comments === 0) {
+    const altCommentsMatch = text.match(/评论(\d+)/);
+    if (altCommentsMatch) {
+      stats.comments = parseInt(altCommentsMatch[1], 10);
+    }
+  }
+  
+  if (stats.followers === 0) {
+    const altFollowersMatch = text.match(/粉丝(\d+)/);
+    if (altFollowersMatch) {
+      stats.followers = parseInt(altFollowersMatch[1], 10);
+    }
+  }
+
+  // 加入时间：2026年3月11日 加入
+  const joinedMatch = text.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s*加入/);
+  if (joinedMatch) {
+    const [_, year, month, day] = joinedMatch;
+    stats.joinedAt = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+
+  // 最后活跃：最后活跃 刚刚
+  if (text.includes('最后活跃')) {
+    stats.lastActive = new Date();
   }
 
   return stats;
@@ -445,32 +450,19 @@ function extractUserStats(text: string): {
 
 /**
  * 提取用户简介
+ * 格式：用户名后到统计数据前的内容
  */
-function extractUserBio(text: string): string {
-  // 简介通常在用户名后面，统计数据前面
-  // 格式：用户名后换行，然后是简介，然后是统计数据
+function extractUserBio(text: string, username: string): string {
+  // 找到用户名后的内容，直到遇到统计数字
+  const bioMatch = text.split(username)[1]?.match(/^\s*\n+([\s\S]*?)(?=\*\*\d)/);
+  if (bioMatch) {
+    return bioMatch[1].trim();
+  }
   
-  const lines = text.split('\n').filter(line => line.trim());
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    // 跳过 "TA" 和用户名行
-    if (line === 'TA' || line.startsWith('#')) continue;
-    
-    // 统计数据行（包含 "**数字** 积分" 等格式）
-    if (line.includes('积分') && line.includes('帖子')) continue;
-    
-    // 加入时间行
-    if (line.includes('加入') && line.includes('活跃')) continue;
-    
-    // 帖子列表区域
-    if (line.includes('帖子') && line.includes('评论')) continue;
-    
-    // 其他可能是简介
-    if (line.length > 10 && !line.includes('**')) {
-      return line;
-    }
+  // 备用方式：提取 # username 之后到积分之前的内容
+  const altMatch = text.match(new RegExp(`#\\s*${username}[\\s\\S]*?\\n([\\s\\S]*?)(?=\\*\\*\\d)`));
+  if (altMatch) {
+    return altMatch[1].trim();
   }
   
   return '';
@@ -479,110 +471,26 @@ function extractUserBio(text: string): string {
 /**
  * 提取用户最近帖子
  */
-function extractUserRecentPosts(content: FetchContentItem[]): Array<{
-  id: string;
-  title: string;
-  url: string;
-  likes: number;
-  publishedAt?: string;
-}> {
-  const posts: Array<{
-    id: string;
-    title: string;
-    url: string;
-    likes: number;
-    publishedAt?: string;
-  }> = [];
-
-  let currentTitle = '';
-  let currentUrl = '';
-  let currentLikes = 0;
-  let currentTime = '';
-
+function extractUserRecentPosts(content: FetchContentItem[]): { id: string; title: string; url: string; likes: number }[] {
+  const posts: { id: string; title: string; url: string; likes: number }[] = [];
+  const seenUrls = new Set<string>();
+  
   for (const item of content) {
-    if (item.type === 'link' && item.url) {
-      const postId = extractPostId(item.url);
-      
-      if (postId) {
-        // 如果有之前的帖子数据，先保存
-        if (currentTitle && currentUrl) {
-          posts.push({
-            id: extractPostId(currentUrl) || '',
-            title: currentTitle,
-            url: currentUrl,
-            likes: currentLikes,
-            publishedAt: currentTime,
-          });
-        }
-        
-        // 开始新帖子
-        currentUrl = item.url;
-        currentTitle = item.text || '';
-        currentLikes = 0;
-        currentTime = '';
-      } else if (item.url.includes('/post/')) {
-        // 可能是时间或点赞数链接
-        const text = item.text || '';
-        if (text.match(/^\d+$/)) {
-          currentLikes = parseInt(text, 10);
-        }
-      }
-    }
-
-    if (item.type === 'text') {
-      const text = item.text || '';
-      
-      // 提取时间：如 "20小时前"
-      const timeMatch = text.match(/(\d+小时前|\d+天前|刚刚)/);
-      if (timeMatch) {
-        currentTime = timeMatch[1];
-      }
-      
-      // 提取点赞数
-      const likesMatch = text.match(/^(\d+)$/);
-      if (likesMatch && currentUrl) {
-        currentLikes = parseInt(likesMatch[1], 10);
+    if (item.type === 'link' && item.url?.includes('/post/')) {
+      const url = item.url;
+      if (!seenUrls.has(url)) {
+        seenUrls.add(url);
+        // 从 URL 提取帖子 ID
+        const id = url.split('/post/')[1]?.split('?')[0] || '';
+        posts.push({
+          id,
+          title: '', // 标题需要单独获取
+          url,
+          likes: 0,  // 点赞数需要单独获取
+        });
       }
     }
   }
-
-  // 保存最后一个帖子
-  if (currentTitle && currentUrl) {
-    posts.push({
-      id: extractPostId(currentUrl) || '',
-      title: currentTitle,
-      url: currentUrl,
-      likes: currentLikes,
-      publishedAt: currentTime,
-    });
-  }
-
-  return posts;
-}
-
-// ==================== 工具函数 ====================
-
-/**
- * 解析相对时间字符串
- */
-export function parseRelativeTime(timeStr: string): Date | undefined {
-  const now = new Date();
   
-  if (timeStr === '刚刚') {
-    return now;
-  }
-  
-  const hoursMatch = timeStr.match(/(\d+)小时前/);
-  if (hoursMatch) {
-    const hours = parseInt(hoursMatch[1], 10);
-    return new Date(now.getTime() - hours * 60 * 60 * 1000);
-  }
-  
-  const daysMatch = timeStr.match(/(\d+)天前/);
-  if (daysMatch) {
-    const days = parseInt(daysMatch[1], 10);
-    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  }
-  
-  return undefined;
+  return posts.slice(0, 10);
 }
