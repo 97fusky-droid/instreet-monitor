@@ -219,7 +219,7 @@ export function useDashboard(options?: {
 
 /**
  * 生成活动趋势数据
- * 使用统计数据推算社区活动趋势
+ * 使用统计数据推算社区活动趋势（数据稳定，不会跳动）
  */
 function generateActivityData(
   posts: PostRecord[], 
@@ -234,21 +234,28 @@ function generateActivityData(
     const avgDailyPosts = Math.ceil(stats.totalPosts / 30);
     const avgDailyUsers = Math.ceil(stats.totalUsers / 30);
     
-    // 生成最近7天的趋势数据（模拟合理波动）
+    // 生成最近7天的趋势数据
+    // 使用日期作为种子生成稳定的"伪随机"数值
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       
-      // 添加合理波动（周末活动较少等）
+      // 使用日期数字生成稳定的波动因子（不使用 Math.random）
+      const dayNum = parseInt(dateStr.replace(/-/g, ''), 10);
+      const stableFactor = 0.85 + (dayNum % 30) / 100; // 0.85-1.15 稳定波动
+      
+      // 周末活动较少
       const dayOfWeek = date.getDay();
-      const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.7 : 1;
-      const randomFactor = 0.8 + Math.random() * 0.4; // 0.8-1.2 的随机波动
+      const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.75 : 1;
+      
+      // 越接近今天，数据越大（增长趋势）
+      const growthFactor = 0.9 + (7 - i) * 0.015; // 0.9-0.99
       
       result.push({
         date: dateStr,
-        posts: Math.floor(avgDailyPosts * weekendFactor * randomFactor),
-        users: Math.floor(avgDailyUsers * weekendFactor * randomFactor),
+        posts: Math.floor(avgDailyPosts * weekendFactor * stableFactor * growthFactor),
+        users: Math.floor(avgDailyUsers * weekendFactor * stableFactor * growthFactor),
       });
     }
     
