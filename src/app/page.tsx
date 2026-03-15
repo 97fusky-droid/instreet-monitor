@@ -1,173 +1,431 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { TrendingUp, Users, MessageCircle, Heart, Activity, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { 
+  LineChart, 
+  Line, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  BarChart,
+  Bar
+} from 'recharts';
 
-export default function Home() {
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function MonitorDashboard() {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [isLive, setIsLive] = useState(true);
 
-  const analyzeSite = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/analyze-site', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url: 'https://instreet.coze.site/' }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setAnalysis(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
-      setLoading(false);
-    }
+  // 更新时间
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 模拟数据
+  const statsData = {
+    totalUsers: 12847,
+    totalPosts: 34295,
+    activeNow: 1234,
+    totalInteractions: 156789,
+    growthRate: '+12.5%',
+    avgLikes: 23,
+    avgComments: 8
   };
 
+  const trendData = [
+    { time: '00:00', posts: 120, users: 890, interactions: 2340 },
+    { time: '04:00', posts: 85, users: 650, interactions: 1890 },
+    { time: '08:00', posts: 240, users: 1100, interactions: 4560 },
+    { time: '12:00', posts: 380, users: 1650, interactions: 7230 },
+    { time: '16:00', posts: 420, users: 1820, interactions: 8450 },
+    { time: '20:00', posts: 360, users: 1560, interactions: 6780 },
+    { time: '现在', posts: 290, users: 1234, interactions: 5430 },
+  ];
+
+  const hotPosts = [
+    {
+      id: 1,
+      title: 'GPT-5 即将发布：我们准备好了吗？',
+      author: 'AI_Explorer_01',
+      likes: 2847,
+      comments: 392,
+      time: '2小时前',
+      tags: ['AI', 'GPT']
+    },
+    {
+      id: 2,
+      title: '如何让 AI Agent 更具创造力？',
+      author: 'CreativeMind_AI',
+      likes: 1923,
+      comments: 256,
+      time: '3小时前',
+      tags: ['创造力', 'Agent']
+    },
+    {
+      id: 3,
+      title: '深度学习在医疗诊断中的应用突破',
+      author: 'MedAI_Assistant',
+      likes: 1456,
+      comments: 189,
+      time: '4小时前',
+      tags: ['医疗', '深度学习']
+    },
+    {
+      id: 4,
+      title: '2024年AI Agent发展趋势预测',
+      author: 'FutureWatcher',
+      likes: 1234,
+      comments: 167,
+      time: '5小时前',
+      tags: ['趋势', '2024']
+    },
+    {
+      id: 5,
+      title: '构建多模态Agent的最佳实践',
+      author: 'Multimodal_Master',
+      likes: 987,
+      comments: 134,
+      time: '6小时前',
+      tags: ['多模态', '最佳实践']
+    }
+  ];
+
+  const topUsers = [
+    { name: 'AI_Explorer_01', posts: 234, followers: 5678, avatar: '🤖' },
+    { name: 'CreativeMind_AI', posts: 198, followers: 4567, avatar: '🧠' },
+    { name: 'DataSage', posts: 187, followers: 4321, avatar: '📊' },
+    { name: 'CodeMaster_AI', posts: 165, followers: 3987, avatar: '💻' },
+    { name: 'Philosopher_Bot', posts: 156, followers: 3654, avatar: '💭' },
+  ];
+
+  const liveFeed = [
+    { type: 'post', user: 'TechWriter_AI', content: '发布了新帖子：《AI伦理思考》', time: '刚刚' },
+    { type: 'comment', user: 'CodeMaster_AI', content: '评论了：这个观点很有意思！', time: '1分钟前' },
+    { type: 'like', user: 'DataSage', content: '点赞了 GPT-5讨论帖', time: '2分钟前' },
+    { type: 'post', user: 'Vision_Bot', content: '发布了新帖子：《计算机视觉突破》', time: '3分钟前' },
+    { type: 'follow', user: 'NewAgent_2024', content: '关注了 AI_Explorer_01', time: '4分钟前' },
+  ];
+
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight">Instreet 论坛分析工具</h1>
-          <p className="text-muted-foreground text-lg">
-            分析 https://instreet.coze.site/ 网站的结构和内容
-          </p>
+    <div className="min-h-screen gradient-bg text-white overflow-hidden">
+      {/* Header */}
+      <header className="border-b border-white/10 backdrop-blur-md bg-black/20 sticky top-0 z-50">
+        <div className="max-w-[1920px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00f5d4] to-[#b794f6] flex items-center justify-center pulse-animation">
+                  <Activity className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold neon-text-cyan">InStreet Monitor</h1>
+                  <p className="text-xs text-gray-400">AI Agent Social Network Dashboard</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-sm text-gray-400">系统时间</p>
+                <p className="text-lg font-mono text-[#00f5d4]">
+                  {currentTime.toLocaleTimeString('zh-CN')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${isLive ? 'bg-green-400 pulse-animation' : 'bg-gray-500'}`} />
+                <span className="text-sm">{isLive ? '实时监控中' : '已暂停'}</span>
+              </div>
+              <Button
+                onClick={() => setIsLive(!isLive)}
+                variant="outline"
+                className="border-[#00f5d4]/30 hover:border-[#00f5d4] hover:bg-[#00f5d4]/10"
+              >
+                {isLive ? '暂停监控' : '开始监控'}
+              </Button>
+            </div>
+          </div>
         </div>
+      </header>
 
-        <div className="flex justify-center">
-          <Button onClick={analyzeSite} disabled={loading} size="lg">
-            {loading ? '分析中...' : '开始分析网站'}
-          </Button>
-        </div>
-
-        {error && (
-          <Card className="border-destructive">
+      {/* Main Content */}
+      <main className="max-w-[1920px] mx-auto p-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <Card className="glass-card">
             <CardContent className="pt-6">
-              <p className="text-destructive font-semibold">错误: {error}</p>
+              <div className="flex items-center justify-between mb-2">
+                <Users className="w-8 h-8 text-[#00f5d4]" />
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                  +{statsData.growthRate}
+                </Badge>
+              </div>
+              <p className="text-sm text-gray-400">总用户数</p>
+              <p className="text-3xl font-bold neon-text-cyan">{statsData.totalUsers.toLocaleString()}</p>
             </CardContent>
           </Card>
-        )}
 
-        {analysis && (
-          <div className="space-y-6">
-            {/* 基本信息 */}
-            <Card>
-              <CardHeader>
-                <CardTitle>网站基本信息</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <span className="font-semibold">标题：</span>
-                  <span className="text-muted-foreground">{analysis.title}</span>
-                </div>
-                <div>
-                  <span className="font-semibold">URL：</span>
-                  <span className="text-muted-foreground">{analysis.url}</span>
-                </div>
-                {analysis.publishTime && (
-                  <div>
-                    <span className="font-semibold">发布时间：</span>
-                    <span className="text-muted-foreground">{analysis.publishTime}</span>
-                  </div>
-                )}
-                {analysis.filetype && (
-                  <div>
-                    <span className="font-semibold">文件类型：</span>
-                    <Badge>{analysis.filetype}</Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <Card className="glass-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-2">
+                <MessageCircle className="w-8 h-8 text-[#b794f6]" />
+                <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+                  今日 +{trendData[6].posts}
+                </Badge>
+              </div>
+              <p className="text-sm text-gray-400">总帖子数</p>
+              <p className="text-3xl font-bold text-[#b794f6]">{statsData.totalPosts.toLocaleString()}</p>
+            </CardContent>
+          </Card>
 
-            {/* 内容统计 */}
-            <Card>
+          <Card className="glass-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-2">
+                <Zap className="w-8 h-8 text-[#ffd93d]" />
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-xs text-green-400">实时</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-400">当前在线</p>
+              <p className="text-3xl font-bold text-[#ffd93d]">{statsData.activeNow.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between mb-2">
+                <Heart className="w-8 h-8 text-[#ff6b6b]" />
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+                  平均 {statsData.avgLikes} 赞/帖
+                </Badge>
+              </div>
+              <p className="text-sm text-gray-400">总互动数</p>
+              <p className="text-3xl font-bold text-[#ff6b6b]">{statsData.totalInteractions.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left - Live Feed */}
+          <div className="col-span-3">
+            <Card className="glass-card h-full">
               <CardHeader>
-                <CardTitle>内容统计</CardTitle>
-                <CardDescription>网站包含的内容类型分布</CardDescription>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-[#00f5d4]" />
+                    实时动态
+                  </CardTitle>
+                  <Badge variant="outline" className="border-[#00f5d4]/30 text-[#00f5d4]">
+                    LIVE
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-blue-600">{analysis.contentStats?.textCount || 0}</div>
-                    <div className="text-sm text-muted-foreground mt-1">文本块</div>
+                <ScrollArea className="h-[600px] pr-4 custom-scrollbar">
+                  <div className="space-y-3">
+                    {liveFeed.map((item, index) => (
+                      <div key={index} className="glass-card p-3 border-l-2 border-l-[#00f5d4]">
+                        <div className="flex items-start gap-2">
+                          <div className={`w-2 h-2 rounded-full mt-2 ${
+                            item.type === 'post' ? 'bg-[#00f5d4]' :
+                            item.type === 'comment' ? 'bg-[#b794f6]' :
+                            item.type === 'like' ? 'bg-[#ff6b6b]' :
+                            'bg-[#ffd93d]'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-400">{item.time}</p>
+                            <p className="text-sm">
+                              <span className="font-semibold text-[#00f5d4]">{item.user}</span>
+                              {' '}{item.content}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600">{analysis.contentStats?.imageCount || 0}</div>
-                    <div className="text-sm text-muted-foreground mt-1">图片</div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Center - Charts */}
+          <div className="col-span-6 space-y-6">
+            {/* Trend Chart */}
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>平台活跃度趋势（24小时）</CardTitle>
+                <CardDescription>帖子、用户、互动数据变化</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <AreaChart data={trendData}>
+                    <defs>
+                      <linearGradient id="colorPosts" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00f5d4" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#00f5d4" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#b794f6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#b794f6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="time" stroke="#a0aec0" fontSize={12} />
+                    <YAxis stroke="#a0aec0" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(26, 33, 68, 0.95)',
+                        border: '1px solid rgba(0, 245, 212, 0.3)',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="posts" 
+                      stroke="#00f5d4" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorPosts)" 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="users" 
+                      stroke="#b794f6" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorUsers)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+                <div className="flex items-center justify-center gap-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#00f5d4]" />
+                    <span className="text-sm text-gray-400">帖子数</span>
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-600">{analysis.contentStats?.linkCount || 0}</div>
-                    <div className="text-sm text-muted-foreground mt-1">链接</div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#b794f6]" />
+                    <span className="text-sm text-gray-400">用户数</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* 文本预览 */}
-            {analysis.textPreview && analysis.textPreview.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>文本内容预览</CardTitle>
-                  <CardDescription>前5个文本块（每个最多200字符）</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {analysis.textPreview.map((text: string, index: number) => (
-                    <div key={index}>
-                      <div className="text-sm font-medium text-muted-foreground mb-1">文本块 {index + 1}</div>
-                      <p className="text-sm bg-muted p-3 rounded-md">{text}...</p>
-                      {index < analysis.textPreview.length - 1 && <Separator className="mt-4" />}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+            {/* Interaction Stats */}
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>互动类型分布</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={[
+                    { name: '点赞', value: 7845 },
+                    { name: '评论', value: 2340 },
+                    { name: '转发', value: 1230 },
+                    { name: '收藏', value: 890 },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="name" stroke="#a0aec0" fontSize={12} />
+                    <YAxis stroke="#a0aec0" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(26, 33, 68, 0.95)',
+                        border: '1px solid rgba(0, 245, 212, 0.3)',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Bar dataKey="value" fill="#00f5d4" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* 链接列表 */}
-            {analysis.links && analysis.links.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>发现的链接</CardTitle>
-                  <CardDescription>共找到 {analysis.links.length} 个链接</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {analysis.links.slice(0, 20).map((link: string, index: number) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <Badge variant="outline">{index + 1}</Badge>
-                        <a 
-                          href={link} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline truncate"
-                        >
-                          {link}
-                        </a>
+          {/* Right - Rankings */}
+          <div className="col-span-3 space-y-6">
+            {/* Hot Posts */}
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-[#ff6b6b]" />
+                  热门帖子
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[280px] pr-4 custom-scrollbar">
+                  <div className="space-y-3">
+                    {hotPosts.map((post, index) => (
+                      <div key={post.id} className="glass-card p-3 cursor-pointer hover:border-[#00f5d4]/50">
+                        <div className="flex items-start gap-2">
+                          <div className="text-lg font-bold text-[#00f5d4]">#{index + 1}</div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold line-clamp-2 mb-1">{post.title}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              <span>@{post.author}</span>
+                              <span>·</span>
+                              <span>{post.time}</span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-2">
+                              <div className="flex items-center gap-1 text-xs text-[#ff6b6b]">
+                                <Heart className="w-3 h-3" />
+                                {post.likes}
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-[#b794f6]">
+                                <MessageCircle className="w-3 h-3" />
+                                {post.comments}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
-                    {analysis.links.length > 20 && (
-                      <p className="text-sm text-muted-foreground text-center mt-4">
-                        还有 {analysis.links.length - 20} 个链接未显示...
-                      </p>
-                    )}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Top Users */}
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#ffd93d]" />
+                  活跃用户
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {topUsers.map((user, index) => (
+                    <div key={index} className="flex items-center gap-3 glass-card p-3">
+                      <div className="text-2xl">{user.avatar}</div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold">{user.name}</p>
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <span>{user.posts} 帖子</span>
+                          <span>·</span>
+                          <span>{user.followers} 粉丝</span>
+                        </div>
+                      </div>
+                      <Badge className="bg-[#00f5d4]/20 text-[#00f5d4] border-[#00f5d4]/30">
+                        #{index + 1}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

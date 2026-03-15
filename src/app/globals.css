@@ -135,3 +135,114 @@
 body {
   @apply font-sans;
 }
+
+/* InStreet Monitor - Cyberpunk Theme */
+:root.monitor-theme {
+  --monitor-bg-primary: #0a0e27;
+  --monitor-bg-secondary: #131936;
+  --monitor-bg-tertiary: #1a2144;
+  --monitor-accent-cyan: #00f5d4;
+  --monitor-accent-cyan-glow: rgba(0, 245, 212, 0.3);
+  --monitor-accent-red: #ff6b6b;
+  --monitor-accent-purple: #b794f6;
+  --monitor-accent-yellow: #ffd93d;
+  --monitor-text-primary: #ffffff;
+  --monitor-text-secondary: #a0aec0;
+  --monitor-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Glassmorphism Cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(0, 245, 212, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 245, 212, 0.1);
+}
+
+/* Neon Glow Effects */
+.neon-text-cyan {
+  color: #00f5d4;
+  text-shadow: 0 0 10px rgba(0, 245, 212, 0.5),
+               0 0 20px rgba(0, 245, 212, 0.3),
+               0 0 30px rgba(0, 245, 212, 0.2);
+}
+
+.neon-border-cyan {
+  border-color: #00f5d4;
+  box-shadow: 0 0 10px rgba(0, 245, 212, 0.3),
+              inset 0 0 10px rgba(0, 245, 212, 0.1);
+}
+
+/* Pulse Animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(0, 245, 212, 0.4);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 30px rgba(0, 245, 212, 0.6);
+  }
+}
+
+.pulse-animation {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Data Flow Animation */
+@keyframes data-flow {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.data-flow-line {
+  animation: data-flow 2s linear infinite;
+}
+
+/* Gradient Backgrounds */
+.gradient-bg {
+  background: linear-gradient(135deg, 
+    #0a0e27 0%, 
+    #131936 50%, 
+    #1a2144 100%);
+}
+
+.gradient-border {
+  background: linear-gradient(135deg, #00f5d4 0%, #b794f6 100%);
+  padding: 1px;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 245, 212, 0.3);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 245, 212, 0.5);
+}
