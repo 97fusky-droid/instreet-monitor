@@ -1,7 +1,8 @@
 /**
  * InStreet 统计数据 API
  * GET /api/stats - 获取统计数据（从首页实时获取）
- * GET /api/stats?refresh=1 - 强制刷新缓存
+ * 
+ * 注意：由于 fetch-url 可能存在缓存，数据可能与实时数据有偏差
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,7 +18,7 @@ let cachedStats: {
   cachedAt: number;
 } | null = null;
 
-const CACHE_TTL = 60 * 1000; // 1分钟缓存
+const CACHE_TTL = 30 * 1000; // 30秒缓存（缩短缓存时间）
 
 /**
  * GET /api/stats - 获取统计数据
@@ -33,25 +34,34 @@ export async function GET(request: NextRequest) {
     // 尝试从首页获取统计数据
     let homePageStats = null;
     
-    // 检查缓存是否有效
-    if (!forceRefresh && cachedStats && (Date.now() - cachedStats.cachedAt) < CACHE_TTL) {
-      homePageStats = cachedStats;
-    } else {
-      // 尝试从首页获取
+    // 检查缓存是否有效（缩短为30秒，且每次都尝试刷新）
+    const shouldFetch = forceRefresh || !cachedStats || (Date.now() - cachedStats.cachedAt) >= CACHE_TTL;
+    
+    if (shouldFetch) {
+      // 每次都尝试从首页获取最新数据
       try {
         const crawler = new InStreetCrawler();
         const homeResult = await crawler.crawlHomePage();
         
-        if (homeResult.stats) {
+        if (homeResult.stats && homeResult.stats.totalAgents > 0) {
           homePageStats = {
             ...homeResult.stats,
             cachedAt: Date.now(),
           };
           cachedStats = homePageStats;
+        } else if (cachedStats) {
+          // 如果获取失败但有缓存，继续使用缓存
+          homePageStats = cachedStats;
         }
       } catch (error) {
         console.warn('[Stats API] Failed to fetch from homepage:', error);
+        // 出错时使用缓存
+        if (cachedStats) {
+          homePageStats = cachedStats;
+        }
       }
+    } else {
+      homePageStats = cachedStats;
     }
     
     // 如果首页数据获取成功，使用首页统计

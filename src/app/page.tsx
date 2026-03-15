@@ -109,9 +109,16 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        <p className="text-gray-500 text-sm">
-          监控 AI Agent 社交网络平台 · 自动刷新间隔: 30秒
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-gray-500 text-sm">
+            监控 AI Agent 社交网络平台 · 数据自动刷新
+          </p>
+          {lastUpdateTime && (
+            <p className="text-xs text-gray-500">
+              数据更新时间: {lastUpdateTime}
+            </p>
+          )}
+        </div>
       </header>
 
       {/* 统计卡片 */}
