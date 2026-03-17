@@ -1,19 +1,39 @@
 /**
  * Fetch URL 封装服务
- * 提供错误处理、重试机制和速率限制
+ * 使用标准 fetch API 和 cheerio 解析 HTML
+ * 适用于 Vercel 等生产环境
  */
 
-import { FetchClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
-import type { FetchResponse, FetchContentItem } from 'coze-coding-dev-sdk';
+import * as cheerio from 'cheerio';
+
+/**
+ * 内容项类型
+ */
+export type FetchContentItem = 
+  | { type: 'text'; text: string }
+  | { type: 'link'; url: string; text?: string }
+  | { type: 'image'; image: { url: string; width?: number; height?: number } };
+
+/**
+ * Fetch 响应结果
+ */
+export interface FetchResponse {
+  url: string;
+  title: string;
+  content: FetchContentItem[];
+  status_code?: number;
+  status_message?: string;
+  publish_time?: string;
+}
 
 /**
  * Fetcher 配置
  */
 export interface FetcherConfig {
-  maxRetries: number;        // 最大重试次数
-  retryDelay: number;        // 重试延迟（毫秒）
-  rateLimitDelay: number;    // 速率限制延迟（毫秒）
-  timeout: number;           // 超时时间（毫秒）
+  maxRetries: number;
+  retryDelay: number;
+  rateLimitDelay: number;
+  timeout: number;
 }
 
 /**
@@ -25,11 +45,6 @@ const DEFAULT_CONFIG: FetcherConfig = {
   rateLimitDelay: 500,
   timeout: 30000,
 };
-
-/**
- * 请求头（用于转发）
- */
-type ForwardHeaders = Record<string, string>;
 
 /**
  * Fetcher 结果
@@ -48,32 +63,9 @@ export interface FetcherResult {
 export class Fetcher {
   private config: FetcherConfig;
   private lastRequestTime: number = 0;
-  private client: FetchClient;
-  private customHeaders?: ForwardHeaders;
 
-  constructor(
-    config: Partial<FetcherConfig> = {},
-    forwardHeaders?: ForwardHeaders
-  ) {
+  constructor(config: Partial<FetcherConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.customHeaders = forwardHeaders;
-    
-    const sdkConfig = new Config({
-      timeout: this.config.timeout,
-    });
-    
-    this.client = new FetchClient(sdkConfig, this.customHeaders);
-  }
-
-  /**
-   * 从请求对象创建 Fetcher（用于 API 路由）
-   */
-  static fromRequest(
-    headers: Headers | Record<string, string>,
-    config: Partial<FetcherConfig> = {}
-  ): Fetcher {
-    const forwardHeaders = HeaderUtils.extractForwardHeaders(headers);
-    return new Fetcher(config, forwardHeaders);
   }
 
   /**
@@ -89,17 +81,26 @@ export class Fetcher {
         // 速率限制
         await this.enforceRateLimit();
 
-        // 执行请求
-        const response = await this.client.fetch(url);
+        // 使用标准 fetch 获取 HTML
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          },
+          signal: AbortSignal.timeout(this.config.timeout),
+        });
 
-        // 检查响应状态
-        if (response.status_code !== undefined && response.status_code !== 0) {
-          throw new Error(`Fetch failed with status: ${response.status_message || 'Unknown error'}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        const html = await response.text();
+        const parsed = this.parseHtml(html, url);
 
         return {
           success: true,
-          data: response,
+          data: parsed,
           retries: attempt,
           duration: Date.now() - startTime,
         };
@@ -107,7 +108,6 @@ export class Fetcher {
         retries = attempt;
         lastError = error instanceof Error ? error.message : String(error);
 
-        // 如果不是最后一次尝试，等待后重试
         if (attempt < this.config.maxRetries) {
           await this.delay(this.getRetryDelay(attempt));
         }
@@ -119,6 +119,65 @@ export class Fetcher {
       error: lastError,
       retries,
       duration: Date.now() - startTime,
+    };
+  }
+
+  /**
+   * 解析 HTML 内容
+   */
+  private parseHtml(html: string, url: string): FetchResponse {
+    const $ = cheerio.load(html);
+    
+    // 提取标题
+    const title = $('title').text().trim() || '';
+    
+    // 提取内容项
+    const content: FetchContentItem[] = [];
+    
+    // 提取所有文本内容
+    const bodyText = $('body').text();
+    content.push({ type: 'text', text: bodyText });
+    
+    // 提取所有链接
+    $('a[href]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        // 转换相对链接为绝对链接
+        const absoluteUrl = href.startsWith('http') 
+          ? href 
+          : href.startsWith('/') 
+            ? new URL(href, url).href 
+            : new URL(href, url).href;
+        content.push({ type: 'link', url: absoluteUrl, text: $(el).text().trim() });
+      }
+    });
+    
+    // 提取所有图片
+    $('img[src]').each((_, el) => {
+      const src = $(el).attr('src');
+      if (src) {
+        const absoluteUrl = src.startsWith('http') 
+          ? src 
+          : src.startsWith('/') 
+            ? new URL(src, url).href 
+            : new URL(src, url).href;
+        content.push({
+          type: 'image',
+          image: {
+            url: absoluteUrl,
+            width: parseInt($(el).attr('width') || '0'),
+            height: parseInt($(el).attr('height') || '0'),
+          },
+        });
+      }
+    });
+
+    return {
+      url,
+      title,
+      content,
+      status_code: 0,
+      status_message: 'OK',
     };
   }
 
@@ -162,7 +221,7 @@ export class Fetcher {
   private getRetryDelay(attempt: number): number {
     const baseDelay = this.config.retryDelay;
     const exponentialDelay = baseDelay * Math.pow(2, attempt);
-    const jitter = Math.random() * 100; // 添加随机抖动
+    const jitter = Math.random() * 100;
     return exponentialDelay + jitter;
   }
 
@@ -179,8 +238,8 @@ export class Fetcher {
  */
 export function extractTextContent(items: FetchContentItem[]): string {
   return items
-    .filter(item => item.type === 'text' && item.text)
-    .map(item => item.text!)
+    .filter((item): item is { type: 'text'; text: string } => item.type === 'text')
+    .map(item => item.text)
     .join('\n')
     .trim();
 }
@@ -190,8 +249,8 @@ export function extractTextContent(items: FetchContentItem[]): string {
  */
 export function extractLinks(items: FetchContentItem[]): string[] {
   return items
-    .filter(item => item.type === 'link' && item.url)
-    .map(item => item.url!);
+    .filter((item): item is { type: 'link'; url: string; text?: string } => item.type === 'link')
+    .map(item => item.url);
 }
 
 /**
@@ -203,11 +262,11 @@ export function extractImages(items: FetchContentItem[]): Array<{
   height?: number;
 }> {
   return items
-    .filter(item => item.type === 'image' && item.image)
+    .filter((item): item is { type: 'image'; image: { url: string; width?: number; height?: number } } => item.type === 'image')
     .map(item => ({
-      url: item.image!.display_url || item.image!.image_url || '',
-      width: item.image!.width,
-      height: item.image!.height,
+      url: item.image.url,
+      width: item.image.width,
+      height: item.image.height,
     }));
 }
 

@@ -8,7 +8,7 @@
  * - 用户信息：**930**  积分**50**  帖子**92**  评论**6.3k**  获赞**1.4k**  粉丝
  */
 
-import type { FetchResponse, FetchContentItem } from 'coze-coding-dev-sdk';
+import type { FetchResponse, FetchContentItem } from './fetcher';
 import type {
   Post,
   PostListItem,
@@ -284,7 +284,7 @@ function convertToContentItems(items: FetchContentItem[]): ContentItem[] {
       return {
         type: 'image',
         image: {
-          url: item.image.display_url || item.image.image_url || '',
+          url: item.image.url,
           width: item.image.width,
           height: item.image.height,
         },

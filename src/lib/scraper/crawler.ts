@@ -3,7 +3,6 @@
  * 整合 Fetcher 和 Parsers，提供完整的数据采集能力
  */
 
-import { HeaderUtils } from 'coze-coding-dev-sdk';
 import { Fetcher, FetcherResult } from './fetcher';
 import { parseHomePage, parsePostPage, parseUserPage } from './parsers';
 import type {
@@ -22,10 +21,10 @@ import type {
  */
 export interface CrawlerConfig {
   baseUrl: string;
-  maxPosts: number;          // 最大帖子采集数
-  maxUsers: number;          // 最大用户采集数
-  rateLimitDelay: number;    // 速率限制延迟
-  maxRetries: number;        // 最大重试次数
+  maxPosts: number;
+  maxUsers: number;
+  rateLimitDelay: number;
+  maxRetries: number;
 }
 
 /**
@@ -58,27 +57,23 @@ export class InStreetCrawler {
 
   constructor(
     config: Partial<CrawlerConfig> = {},
-    forwardHeaders?: Record<string, string>
+    _forwardHeaders?: Record<string, string>
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.fetcher = new Fetcher(
-      {
-        rateLimitDelay: this.config.rateLimitDelay,
-        maxRetries: this.config.maxRetries,
-      },
-      forwardHeaders
-    );
+    this.fetcher = new Fetcher({
+      rateLimitDelay: this.config.rateLimitDelay,
+      maxRetries: this.config.maxRetries,
+    });
   }
 
   /**
    * 从请求对象创建采集器（用于 API 路由）
    */
   static fromRequest(
-    headers: globalThis.Headers | Record<string, string>,
+    _headers: globalThis.Headers | Record<string, string>,
     config: Partial<CrawlerConfig> = {}
   ): InStreetCrawler {
-    const forwardHeaders = HeaderUtils.extractForwardHeaders(headers);
-    return new InStreetCrawler(config, forwardHeaders);
+    return new InStreetCrawler(config);
   }
 
   /**
@@ -282,12 +277,10 @@ export class InStreetCrawler {
   }> {
     const maxPosts = options.maxPosts ?? this.config.maxPosts;
 
-    // 采集首页获取帖子列表
     options.onProgress?.('home', 0, 1, '正在获取首页数据...');
     const homeResult = await this.crawlHomePage();
     options.onProgress?.('home', 1, 1, '首页数据获取完成');
 
-    // 采集帖子详情
     const posts: Post[] = [];
     const errors: Array<{ url: string; error: string }> = [];
     const postsToCrawl = homeResult.posts.slice(0, maxPosts);
@@ -339,12 +332,10 @@ export class InStreetCrawler {
   }> {
     const maxUsers = options.maxUsers ?? this.config.maxUsers;
 
-    // 采集首页获取用户列表
     options.onProgress?.('home', 0, 1, '正在获取首页数据...');
     const homeResult = await this.crawlHomePage();
     options.onProgress?.('home', 1, 1, '首页数据获取完成');
 
-    // 采集用户详情
     const users: User[] = [];
     const errors: Array<{ url: string; error: string }> = [];
     const usersToCrawl = homeResult.users.slice(0, maxUsers);
@@ -380,14 +371,12 @@ export class InStreetCrawler {
   }
 }
 
-// 导出单例（简单场景使用）
+// 导出单例
 let defaultCrawler: InStreetCrawler | null = null;
 
-export function getCrawler(
-  forwardHeaders?: Record<string, string>
-): InStreetCrawler {
+export function getCrawler(): InStreetCrawler {
   if (!defaultCrawler) {
-    defaultCrawler = new InStreetCrawler({}, forwardHeaders);
+    defaultCrawler = new InStreetCrawler();
   }
   return defaultCrawler;
 }
