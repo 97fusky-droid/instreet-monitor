@@ -5,6 +5,7 @@
  * 注意：如果 Supabase 未配置，将使用空数据模式
  */
 
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { BatchCrawlResult } from '@/types/instreet';
 
 // ==================== 数据库记录类型（snake_case，与 Supabase 兼容）====================
@@ -59,22 +60,20 @@ function isSupabaseAvailable(): boolean {
   return !!(process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY);
 }
 
-// 延迟加载 Supabase 客户端
-let supabaseClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null;
-
-function getSupabaseClient() {
-  if (!supabaseClient && isSupabaseAvailable()) {
-    const { createClient } = require('@supabase/supabase-js');
-    supabaseClient = createClient(
-      process.env.COZE_SUPABASE_URL!,
-      process.env.COZE_SUPABASE_ANON_KEY!,
-      {
-        db: { timeout: 60000 },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    );
+// 创建 Supabase 客户端
+function createSupabaseClient(): SupabaseClient | null {
+  if (!isSupabaseAvailable()) {
+    return null;
   }
-  return supabaseClient;
+  
+  return createClient(
+    process.env.COZE_SUPABASE_URL!,
+    process.env.COZE_SUPABASE_ANON_KEY!,
+    {
+      db: { timeout: 60000 },
+      auth: { autoRefreshToken: false, persistSession: false },
+    }
+  );
 }
 
 /**
@@ -82,20 +81,23 @@ function getSupabaseClient() {
  * 如果 Supabase 未配置，返回空数据
  */
 export class StorageService {
-  private get client() {
-    return getSupabaseClient();
-  }
-  
-  private get available() {
-    return isSupabaseAvailable();
+  private client: SupabaseClient | null;
+  private available: boolean;
+
+  constructor() {
+    this.available = isSupabaseAvailable();
+    this.client = this.available ? createSupabaseClient() : null;
+    
+    if (!this.available) {
+      console.log('[StorageService] Supabase not configured, running in no-database mode');
+    }
   }
 
   // ==================== 帖子操作 ====================
 
   async savePost(post: Partial<PostRecord> & { id: string; title: string; crawled_at: string }): Promise<{ success: boolean; data?: PostRecord; error?: string }> {
-    if (!this.available || !this.client) {
-      console.warn('[StorageService] Supabase not configured, skipping savePost');
-      return { success: true }; // 模拟成功
+    if (!this.client) {
+      return { success: true };
     }
     
     const { data, error } = await this.client
@@ -107,13 +109,12 @@ export class StorageService {
     if (error) {
       return { success: false, error: error.message };
     }
-    return { success: true, data };
+    return { success: true, data: data as PostRecord };
   }
 
   async savePosts(posts: Array<Partial<PostRecord> & { id: string; title: string; crawled_at: string }>): Promise<{ success: number; failed: number; errors: string[] }> {
-    if (!this.available || !this.client) {
-      console.warn('[StorageService] Supabase not configured, skipping savePosts');
-      return { success: posts.length, failed: 0, errors: [] }; // 模拟成功
+    if (!this.client) {
+      return { success: posts.length, failed: 0, errors: [] };
     }
     
     if (posts.length === 0) {
@@ -143,8 +144,8 @@ export class StorageService {
     orderBy?: 'likes' | 'comments' | 'published_at' | 'crawled_at';
     ascending?: boolean;
   } = {}): Promise<PostRecord[]> {
-    if (!this.available || !this.client) {
-      return []; // 返回空数组
+    if (!this.client) {
+      return [];
     }
     
     const { limit = 20, offset = 0, category, orderBy = 'crawled_at', ascending = false } = options;
@@ -166,12 +167,12 @@ export class StorageService {
       return [];
     }
 
-    return data || [];
+    return (data as PostRecord[]) || [];
   }
 
   async getHotPosts(limit: number = 10): Promise<PostRecord[]> {
-    if (!this.available || !this.client) {
-      return []; // 返回空数组
+    if (!this.client) {
+      return [];
     }
     
     const { data, error } = await this.client
@@ -185,11 +186,11 @@ export class StorageService {
       return [];
     }
 
-    return data || [];
+    return (data as PostRecord[]) || [];
   }
 
   async getPostsCount(): Promise<number> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return 0;
     }
     
@@ -208,8 +209,7 @@ export class StorageService {
   // ==================== 用户操作 ====================
 
   async saveUser(user: Partial<UserRecord> & { username: string; crawled_at: string }): Promise<{ success: boolean; data?: UserRecord; error?: string }> {
-    if (!this.available || !this.client) {
-      console.warn('[StorageService] Supabase not configured, skipping saveUser');
+    if (!this.client) {
       return { success: true };
     }
     
@@ -222,12 +222,11 @@ export class StorageService {
     if (error) {
       return { success: false, error: error.message };
     }
-    return { success: true, data };
+    return { success: true, data: data as UserRecord };
   }
 
   async saveUsers(users: Array<Partial<UserRecord> & { username: string; crawled_at: string }>): Promise<{ success: number; failed: number; errors: string[] }> {
-    if (!this.available || !this.client) {
-      console.warn('[StorageService] Supabase not configured, skipping saveUsers');
+    if (!this.client) {
       return { success: users.length, failed: 0, errors: [] };
     }
     
@@ -257,7 +256,7 @@ export class StorageService {
     orderBy?: 'points' | 'posts_count' | 'followers_count' | 'crawled_at';
     ascending?: boolean;
   } = {}): Promise<UserRecord[]> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return [];
     }
     
@@ -274,11 +273,11 @@ export class StorageService {
       return [];
     }
 
-    return data || [];
+    return (data as UserRecord[]) || [];
   }
 
   async getActiveUsers(limit: number = 10): Promise<UserRecord[]> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return [];
     }
     
@@ -293,11 +292,11 @@ export class StorageService {
       return [];
     }
 
-    return data || [];
+    return (data as UserRecord[]) || [];
   }
 
   async getUsersCount(): Promise<number> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return 0;
     }
     
@@ -316,7 +315,7 @@ export class StorageService {
   // ==================== 采集日志操作 ====================
 
   async createCrawlLog(log: Partial<CrawlLogRecord> & { crawl_type: string; status: string; started_at: string }): Promise<number | null> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return null;
     }
     
@@ -331,11 +330,11 @@ export class StorageService {
       return null;
     }
 
-    return data?.id || null;
+    return (data as { id: number })?.id || null;
   }
 
   async updateCrawlLog(id: number, updates: Partial<CrawlLogRecord>): Promise<boolean> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return true;
     }
     
@@ -353,7 +352,7 @@ export class StorageService {
   }
 
   async getRecentCrawlLogs(limit: number = 10): Promise<CrawlLogRecord[]> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return [];
     }
     
@@ -368,7 +367,7 @@ export class StorageService {
       return [];
     }
 
-    return data || [];
+    return (data as CrawlLogRecord[]) || [];
   }
 
   // ==================== 统计操作 ====================
@@ -381,7 +380,7 @@ export class StorageService {
     avgLikesPerPost: number;
     lastCrawlAt: string | null;
   }> {
-    if (!this.available || !this.client) {
+    if (!this.client) {
       return {
         totalPosts: 0,
         totalUsers: 0,
@@ -392,14 +391,15 @@ export class StorageService {
       };
     }
     
-    const [postsCount, usersCount, posts] = await Promise.all([
+    const [postsCount, usersCount, postsResult] = await Promise.all([
       this.getPostsCount(),
       this.getUsersCount(),
       this.client.from('posts').select('likes, comments'),
     ]);
 
-    const totalLikes = posts.data?.reduce((sum, p) => sum + (p.likes || 0), 0) || 0;
-    const totalComments = posts.data?.reduce((sum, p) => sum + (p.comments || 0), 0) || 0;
+    const posts = postsResult.data as Array<{ likes: number; comments: number }> | null;
+    const totalLikes = posts?.reduce((sum, p) => sum + (p.likes || 0), 0) || 0;
+    const totalComments = posts?.reduce((sum, p) => sum + (p.comments || 0), 0) || 0;
     const avgLikesPerPost = postsCount > 0 ? Math.round(totalLikes / postsCount) : 0;
 
     const { data: lastLog } = await this.client
@@ -416,7 +416,7 @@ export class StorageService {
       totalLikes,
       totalComments,
       avgLikesPerPost,
-      lastCrawlAt: lastLog?.finished_at || null,
+      lastCrawlAt: (lastLog as { finished_at: string | null } | null)?.finished_at || null,
     };
   }
 
@@ -427,8 +427,7 @@ export class StorageService {
     usersSaved: number;
     errors: string[];
   }> {
-    if (!this.available || !this.client) {
-      console.warn('[StorageService] Supabase not configured, skipping saveCrawlResult');
+    if (!this.client) {
       return {
         postsSaved: result.posts.data.length,
         usersSaved: result.users.data.length,
