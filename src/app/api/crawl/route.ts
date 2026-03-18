@@ -36,7 +36,8 @@ interface CrawlResponse {
 export async function POST(request: NextRequest): Promise<NextResponse<CrawlResponse>> {
   try {
     const body: CrawlRequest = await request.json();
-    const { type = 'full', maxPosts = 10, maxUsers = 5, save = false } = body;
+    // 默认保存数据
+    const { type = 'full', maxPosts = 10, maxUsers = 5, save = true } = body;
 
     // 创建采集器，转发请求头
     const crawler = InStreetCrawler.fromRequest(request.headers);
