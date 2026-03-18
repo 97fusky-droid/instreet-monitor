@@ -152,7 +152,27 @@ export function parsePostPage(response: FetchResponse, postUrl: string): Post | 
   }
 
   const content = response.content;
-  const title = response.title || '';
+  const textContent = extractTextContent(content);
+  
+  // 从内容中提取标题（通常是第一个 # 开头的行）
+  let title = '';
+  const titleMatch = textContent.match(/^#\s+(.+)$/m);
+  if (titleMatch) {
+    title = titleMatch[1].trim();
+  } else {
+    // 如果没有 # 标题，尝试从内容前几行提取
+    const lines = textContent.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const cleanLine = line.replace(/[·\s]+积分·/g, '').trim();
+      if (cleanLine.length > 5 && cleanLine.length < 200 && !cleanLine.includes('赞') && !cleanLine.includes('评论')) {
+        title = cleanLine;
+        break;
+      }
+    }
+    if (!title && response.title) {
+      title = response.title.replace(' - InStreet', '').trim();
+    }
+  }
   
   // 提取作者信息
   const { author, authorUrl, points } = extractAuthorInfo(content);
@@ -160,8 +180,6 @@ export function parsePostPage(response: FetchResponse, postUrl: string): Post | 
   // 提取点赞和评论数
   const { likes, comments } = extractEngagementInfo(content);
   
-  // 提取内容
-  const textContent = extractTextContent(content);
   const rawContent = convertToContentItems(content);
 
   console.log('[Parser] Post parsed:', {

@@ -8,11 +8,25 @@ import { InStreetCrawler } from '@/lib/scraper/crawler';
 import { getStorageService } from '@/lib/storage';
 
 // 缓存首页统计数据，避免频繁请求
-let cachedStats: {
-  totalAgents: number;
-  totalPosts: number;
-  totalComments: number;
-  totalLikes: number;
+let cachedData: {
+  stats: {
+    totalAgents: number;
+    totalPosts: number;
+    totalComments: number;
+    totalLikes: number;
+  };
+  hotPosts: Array<{
+    id: string;
+    title: string;
+    author: string;
+    likes: number;
+    comments: number;
+  }>;
+  activeUsers: Array<{
+    username: string;
+    posts: number;
+    followers: number;
+  }>;
   cachedAt: number;
 } | null = null;
 
@@ -29,62 +43,121 @@ export async function GET(request: NextRequest) {
     
     const storage = getStorageService();
     
-    // 尝试从首页获取统计数据
-    let homePageStats = null;
-    
     // 检查缓存是否有效
-    const shouldFetch = forceRefresh || !cachedStats || (Date.now() - cachedStats.cachedAt) >= CACHE_TTL;
+    const shouldFetch = forceRefresh || !cachedData || (Date.now() - cachedData.cachedAt) >= CACHE_TTL;
     
     if (shouldFetch) {
       try {
+        // 获取首页数据
         const crawler = InStreetCrawler.fromRequest(request.headers);
         const homeResult = await crawler.crawlHomePage();
         
         if (homeResult.stats && homeResult.stats.totalAgents > 0) {
-          homePageStats = {
-            ...homeResult.stats,
+          // 爬取热门帖子详情（前5个）
+          const hotPosts: Array<{
+            id: string;
+            title: string;
+            author: string;
+            likes: number;
+            comments: number;
+          }> = [];
+          
+          const postsToFetch = homeResult.posts.slice(0, 5);
+          for (const postItem of postsToFetch) {
+            try {
+              const postResult = await crawler.crawlPost(postItem.url);
+              if (postResult.success && postResult.post) {
+                hotPosts.push({
+                  id: postResult.post.id,
+                  title: postResult.post.title,
+                  author: postResult.post.author,
+                  likes: postResult.post.likes,
+                  comments: postResult.post.comments,
+                });
+              }
+            } catch (e) {
+              console.warn('[Stats API] Failed to fetch post:', postItem.url, e);
+            }
+          }
+          
+          // 爬取活跃用户详情（前5个）
+          const activeUsers: Array<{
+            username: string;
+            posts: number;
+            followers: number;
+          }> = [];
+          
+          const usersToFetch = homeResult.users.slice(0, 5);
+          for (const userItem of usersToFetch) {
+            try {
+              const userResult = await crawler.crawlUser(userItem.url);
+              if (userResult.success && userResult.user) {
+                activeUsers.push({
+                  username: userResult.user.username,
+                  posts: userResult.user.posts,
+                  followers: userResult.user.followers,
+                });
+              }
+            } catch (e) {
+              console.warn('[Stats API] Failed to fetch user:', userItem.url, e);
+            }
+          }
+          
+          cachedData = {
+            stats: homeResult.stats,
+            hotPosts,
+            activeUsers,
             cachedAt: Date.now(),
           };
-          cachedStats = homePageStats;
-          console.log('[Stats API] Fresh stats from homepage:', homePageStats);
-        } else if (cachedStats) {
-          // 如果获取失败但有缓存，继续使用缓存
-          homePageStats = cachedStats;
-          console.log('[Stats API] Using cached stats:', homePageStats);
+          
+          console.log('[Stats API] Fresh data from homepage:', cachedData);
         }
       } catch (error) {
         console.warn('[Stats API] Failed to fetch from homepage:', error);
-        // 出错时使用缓存
-        if (cachedStats) {
-          homePageStats = cachedStats;
-        }
       }
-    } else {
-      homePageStats = cachedStats;
     }
     
-    // 如果首页数据获取成功，使用首页统计
-    if (homePageStats) {
-      // 获取数据库中的热门帖子和活跃用户
-      const hotPosts = await storage.getHotPosts(5);
-      const activeUsers = await storage.getActiveUsers(5);
+    // 如果有缓存数据，直接返回
+    if (cachedData) {
+      // 尝试从数据库获取更多数据
+      const dbHotPosts = await storage.getHotPosts(10);
+      const dbActiveUsers = await storage.getActiveUsers(10);
+      
+      // 合并数据：优先使用爬取的数据，补充数据库数据
+      const finalHotPosts = cachedData.hotPosts.length > 0 
+        ? cachedData.hotPosts 
+        : dbHotPosts.map(p => ({
+            id: p.id,
+            title: p.title,
+            author: p.author_name || 'Unknown',
+            likes: p.likes,
+            comments: p.comments,
+          }));
+      
+      const finalActiveUsers = cachedData.activeUsers.length > 0
+        ? cachedData.activeUsers
+        : dbActiveUsers.map(u => ({
+            username: u.username,
+            posts: u.posts_count,
+            followers: u.followers_count,
+          }));
       
       return NextResponse.json({
         success: true,
         data: {
           overview: {
-            totalPosts: homePageStats.totalPosts,
-            totalUsers: homePageStats.totalAgents,
-            totalLikes: homePageStats.totalLikes,
-            totalComments: homePageStats.totalComments,
-            avgLikesPerPost: homePageStats.totalPosts > 0 
-              ? Math.round(homePageStats.totalLikes / homePageStats.totalPosts) 
+            totalPosts: cachedData.stats.totalPosts,
+            totalUsers: cachedData.stats.totalAgents,
+            totalLikes: cachedData.stats.totalLikes,
+            totalComments: cachedData.stats.totalComments,
+            avgLikesPerPost: cachedData.stats.totalPosts > 0 
+              ? Math.round(cachedData.stats.totalLikes / cachedData.stats.totalPosts) 
               : 0,
             lastCrawlAt: new Date().toISOString(),
             dataSource: 'homepage',
           },
-          hotPosts,
-          activeUsers,
+          hotPosts: finalHotPosts.slice(0, 5),
+          activeUsers: finalActiveUsers.slice(0, 5),
         },
       });
     }
@@ -101,8 +174,18 @@ export async function GET(request: NextRequest) {
           ...stats,
           dataSource: 'database',
         },
-        hotPosts,
-        activeUsers,
+        hotPosts: hotPosts.map(p => ({
+          id: p.id,
+          title: p.title,
+          author: p.author_name || 'Unknown',
+          likes: p.likes,
+          comments: p.comments,
+        })),
+        activeUsers: activeUsers.map(u => ({
+          username: u.username,
+          posts: u.posts_count,
+          followers: u.followers_count,
+        })),
       },
     });
   } catch (error) {
