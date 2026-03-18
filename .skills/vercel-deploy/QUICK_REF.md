@@ -1,38 +1,118 @@
 # Vercel 部署快速参考
 
-## 一、获取 Vercel Token
+## 一、Token 获取
 
+### GitHub Token
+```
+https://github.com/settings/tokens
+→ Generate new token (classic)
+→ 勾选 repo 权限
+→ 复制 token (ghp_xxx)
+```
+
+### Vercel Token
 ```
 https://vercel.com/account/tokens
 → Create Token
+→ Scope: Full Account
 → 复制 token (vcp_xxx)
 ```
 
-## 二、配置环境变量
+---
 
+## 二、GitHub 操作
+
+### 创建仓库
 ```bash
-# 使用脚本
-./scripts/vercel-helper.sh set-env PROJECT_NAME KEY VALUE TOKEN
+curl -X POST "https://api.github.com/user/repos" \
+  -H "Authorization: token GITHUB_TOKEN" \
+  -d '{"name":"REPO_NAME","private":false}'
 
-# 或直接 API
-curl -X POST "https://api.vercel.com/v10/projects/PROJECT_NAME/env" \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"KEY","value":"VALUE","type":"plain","target":["production","preview","development"]}'
+# 或使用脚本
+./scripts/vercel-helper.sh create-repo REPO_NAME GITHUB_TOKEN
 ```
 
-## 三、Supabase 数据库配置
-
+### 推送代码
 ```bash
-# 获取沙箱凭证
+git remote add origin https://TOKEN@github.com/USER/REPO.git
+git push -u origin main
+
+# 或使用脚本
+./scripts/vercel-helper.sh push-code USER/REPO GITHUB_TOKEN
+```
+
+### 检查仓库
+```bash
+curl -s "https://api.github.com/repos/USER/REPO" \
+  -H "Authorization: token GITHUB_TOKEN" | jq '.name,.html_url'
+
+# 或使用脚本
+./scripts/vercel-helper.sh check-repo USER/REPO GITHUB_TOKEN
+```
+
+---
+
+## 三、Vercel 操作
+
+### 创建项目
+```bash
+curl -X POST "https://api.vercel.com/v11/projects" \
+  -H "Authorization: Bearer VERCEL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "PROJECT_NAME",
+    "gitRepository": {
+      "type": "github",
+      "repo": "USER/REPO"
+    }
+  }'
+
+# 或使用脚本
+./scripts/vercel-helper.sh create-project PROJECT_NAME USER/REPO VERCEL_TOKEN
+```
+
+### 设置环境变量
+```bash
+curl -X POST "https://api.vercel.com/v10/projects/PROJECT_NAME/env" \
+  -H "Authorization: Bearer VERCEL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"KEY","value":"VALUE","type":"plain","target":["production","preview","development"]}'
+
+# 或使用脚本
+./scripts/vercel-helper.sh set-env PROJECT_NAME KEY VALUE VERCEL_TOKEN
+```
+
+### 查看项目
+```bash
+curl -s "https://api.vercel.com/v9/projects/PROJECT_NAME" \
+  -H "Authorization: Bearer VERCEL_TOKEN" | jq '.'
+
+# 或使用脚本
+./scripts/vercel-helper.sh get-project PROJECT_NAME VERCEL_TOKEN
+```
+
+---
+
+## 四、Supabase 配置
+
+### 获取沙箱凭证
+```bash
 echo $COZE_SUPABASE_URL
 echo $COZE_SUPABASE_ANON_KEY
 
-# 配置到 Vercel
-./scripts/vercel-helper.sh setup-supabase PROJECT_NAME TOKEN
+# 或使用脚本
+./scripts/vercel-helper.sh get-supabase-creds
 ```
 
-## 四、触发部署
+### 配置到 Vercel
+```bash
+# 一键配置
+./scripts/vercel-helper.sh setup-supabase PROJECT_NAME VERCEL_TOKEN
+```
+
+---
+
+## 五、触发部署
 
 ```bash
 # 方式1：推送代码（推荐）
@@ -40,38 +120,66 @@ git commit --allow-empty -m "deploy" && git push
 
 # 方式2：API 触发
 curl -X POST "https://api.vercel.com/v13/deployments" \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"PROJECT_NAME","gitSource":{"ref":"main"}}'
+  -H "Authorization: Bearer VERCEL_TOKEN" \
+  -d '{"projectId":"PROJECT_ID"}'
 ```
 
-## 五、查看状态
+---
+
+## 六、一键部署
 
 ```bash
-# 项目信息
-curl -s "https://api.vercel.com/v9/projects/PROJECT_NAME" \
-  -H "Authorization: Bearer TOKEN" | jq '.name,.env'
-
-# 部署列表
-curl -s "https://api.vercel.com/v6/deployments?projectId=PROJECT_NAME" \
-  -H "Authorization: Bearer TOKEN" | jq '.deployments[0]'
+# 完整流程：创建仓库 → 推送代码 → 创建项目 → 配置数据库 → 部署
+./scripts/vercel-helper.sh full-deploy REPO_NAME PROJECT_NAME GITHUB_TOKEN VERCEL_TOKEN
 ```
 
-## 六、常用 URL
+---
+
+## 七、常用 URL
 
 | 用途 | URL |
 |------|-----|
-| Token 管理 | https://vercel.com/account/tokens |
-| 项目列表 | https://vercel.com/dashboard |
-| 部署日志 | https://vercel.com/TEAM/PROJECT/deployments |
-| 环境变量 | https://vercel.com/TEAM/PROJECT/settings/environment-variables |
-| API 文档 | https://vercel.com/docs/rest-api |
+| GitHub Token | https://github.com/settings/tokens |
+| GitHub API 文档 | https://docs.github.com/en/rest |
+| Vercel Dashboard | https://vercel.com/ |
+| Vercel Token | https://vercel.com/account/tokens |
+| Vercel API 文档 | https://vercel.com/docs/rest-api |
+| Vercel GitHub 集成 | https://vercel.com/account/integrations |
+| Supabase Dashboard | https://supabase.com/dashboard |
 
-## 七、故障排查
+---
+
+## 八、故障排查
 
 | 问题 | 解决方案 |
 |------|---------|
-| 500 错误 | 检查函数日志 + 环境变量 |
-| 数据库连接失败 | 确认 COZE_SUPABASE_* 已配置 |
+| GitHub push 失败 | 确保 Token 有 `repo` 权限 |
+| Vercel 创建失败 | 检查 GitHub App 是否已安装 |
+| 部署后 500 错误 | 检查环境变量 + 函数日志 |
+| 数据库连接失败 | 运行 `setup-supabase` 配置 |
 | API 超时 | 优化代码或使用流式响应 |
-| 构建失败 | 检查构建日志 + TypeScript 错误 |
+
+---
+
+## 九、脚本命令速查
+
+```bash
+# GitHub
+./scripts/vercel-helper.sh create-repo <name> <token> [private]
+./scripts/vercel-helper.sh push-code <repo> <token>
+./scripts/vercel-helper.sh check-repo <user/repo> <token>
+
+# Vercel
+./scripts/vercel-helper.sh create-project <name> <github_repo> <token>
+./scripts/vercel-helper.sh set-env <project> <key> <value> <token>
+./scripts/vercel-helper.sh get-project <project> <token>
+./scripts/vercel-helper.sh list-projects <token>
+./scripts/vercel-helper.sh delete-project <project> <token>
+
+# Supabase
+./scripts/vercel-helper.sh setup-supabase <project> <token>
+./scripts/vercel-helper.sh get-supabase-creds
+
+# 一键部署
+./scripts/vercel-helper.sh full-deploy <repo> <project> <github_token> <vercel_token>
+```

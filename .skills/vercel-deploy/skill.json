@@ -1,21 +1,54 @@
 {
   "name": "vercel-deploy",
-  "version": "1.0.0",
-  "description": "Vercel 部署技能 - 将项目部署到 Vercel，配置环境变量和数据库连接",
+  "version": "1.1.0",
+  "description": "Vercel 部署技能 - 完整的 GitHub + Vercel 部署流程，包括仓库创建、项目创建、环境变量配置和数据库连接",
   "author": "Coze",
   "triggers": [
     "部署到vercel",
     "vercel部署",
     "配置vercel环境变量",
     "部署nextjs到vercel",
-    "setup vercel deployment"
+    "创建github仓库并部署",
+    "setup vercel deployment",
+    "一键部署到vercel"
   ],
-  "tags": ["vercel", "deploy", "nextjs", "supabase", "环境变量"],
+  "tags": ["vercel", "deploy", "github", "nextjs", "supabase", "环境变量", "CI/CD"],
   "scripts": {
     "helper": "scripts/vercel-helper.sh"
   },
+  "commands": {
+    "github": {
+      "create-repo": "创建 GitHub 仓库",
+      "push-code": "推送代码到仓库",
+      "check-repo": "检查仓库是否存在"
+    },
+    "vercel": {
+      "create-project": "创建 Vercel 项目",
+      "set-env": "设置环境变量",
+      "get-project": "获取项目信息",
+      "list-projects": "列出所有项目",
+      "list-deployments": "列出部署历史",
+      "delete-project": "删除项目"
+    },
+    "supabase": {
+      "setup-supabase": "配置 Supabase 环境变量",
+      "get-supabase-creds": "获取沙箱 Supabase 凭证"
+    },
+    "oneclick": {
+      "full-deploy": "一键完整部署流程"
+    }
+  },
   "requirements": {
     "tools": ["curl", "jq", "git"],
-    "env_vars": ["COZE_SUPABASE_URL", "COZE_SUPABASE_ANON_KEY"]
+    "env_vars": ["COZE_SUPABASE_URL", "COZE_SUPABASE_ANON_KEY"],
+    "tokens": {
+      "github": "ghp_xxx 格式，需要 repo 权限",
+      "vercel": "vcp_xxx 格式，需要 Full Account 权限"
+    }
+  },
+  "files": {
+    "SKILL.md": "完整技能文档",
+    "QUICK_REF.md": "快速参考卡片",
+    "scripts/vercel-helper.sh": "辅助脚本"
   }
 }
