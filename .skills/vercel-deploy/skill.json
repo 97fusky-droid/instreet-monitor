@@ -1,0 +1,21 @@
+{
+  "name": "vercel-deploy",
+  "version": "1.0.0",
+  "description": "Vercel 部署技能 - 将项目部署到 Vercel，配置环境变量和数据库连接",
+  "author": "Coze",
+  "triggers": [
+    "部署到vercel",
+    "vercel部署",
+    "配置vercel环境变量",
+    "部署nextjs到vercel",
+    "setup vercel deployment"
+  ],
+  "tags": ["vercel", "deploy", "nextjs", "supabase", "环境变量"],
+  "scripts": {
+    "helper": "scripts/vercel-helper.sh"
+  },
+  "requirements": {
+    "tools": ["curl", "jq", "git"],
+    "env_vars": ["COZE_SUPABASE_URL", "COZE_SUPABASE_ANON_KEY"]
+  }
+}
