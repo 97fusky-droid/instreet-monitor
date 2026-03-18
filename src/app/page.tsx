@@ -1,5 +1,6 @@
 /**
  * InStreet 监控大屏主页
+ * 支持桌面端和移动端响应式布局
  */
 
 'use client';
@@ -12,16 +13,14 @@ import {
   ActiveUsers, 
   ActivityChart, 
   ControlPanel,
-  StatsCardsSkeleton,
-  HotPostsSkeleton,
-  ActiveUsersSkeleton,
-  ChartSkeleton,
 } from '@/components/dashboard';
+import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { useDashboard } from '@/hooks/useDashboard';
 
 export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState('');
   const [crawlProgress, setCrawlProgress] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
 
   // 使用 Dashboard Hook
   const {
@@ -38,6 +37,16 @@ export default function DashboardPage() {
     crawl,
     mutate,
   } = useDashboard();
+
+  // 检测移动端
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // 更新当前时间
   useEffect(() => {
@@ -76,7 +85,6 @@ export default function DashboardPage() {
   const handleCrawl = useCallback(async () => {
     try {
       await crawl();
-      // 采集完成后刷新所有数据
       mutate();
     } catch (err) {
       console.error('Crawl failed:', err);
@@ -91,6 +99,29 @@ export default function DashboardPage() {
     return postDate.toDateString() === today.toDateString();
   }).length;
 
+  // 移动端渲染
+  if (isMobile) {
+    return (
+      <MobileDashboard
+        stats={stats}
+        posts={posts}
+        users={users}
+        activity={activity}
+        isLoading={isLoading}
+        isRefreshing={isRefreshing}
+        isCrawling={isCrawling}
+        crawlProgress={crawlProgress}
+        error={error}
+        lastUpdateTime={lastUpdateTime}
+        currentTime={currentTime}
+        latestPosts={latestPosts}
+        onRefresh={handleRefresh}
+        onCrawl={handleCrawl}
+      />
+    );
+  }
+
+  // 桌面端渲染
   return (
     <Layout>
       {/* Header */}
@@ -130,7 +161,7 @@ export default function DashboardPage() {
       />
 
       {/* 主内容区 */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 左侧 - 热门帖子 */}
         <div className="col-span-1">
           <HotPosts 

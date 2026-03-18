@@ -263,3 +263,75 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ==================== 移动端优化 ==================== */
+
+/* 隐藏滚动条（移动端横向滚动统计卡片用） */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS 安全区域适配 */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* 移动端触摸优化 */
+@media (max-width: 767px) {
+  /* 禁用文字选择（更像原生 App） */
+  .glass-card {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* 优化按钮触摸区域 */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* 移动端卡片触摸反馈 */
+  .glass-card:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+  
+  /* 移动端进度条优化 */
+  .progress-bar-mobile {
+    height: 6px;
+    border-radius: 3px;
+  }
+}
+
+/* 移动端动画优化 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 移动端横屏适配 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .safe-area-bottom {
+    padding-bottom: 8px;
+  }
+}
+
+/* 暗色模式下的边框优化 */
+@media (prefers-color-scheme: dark) {
+  .glass-card {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+}
